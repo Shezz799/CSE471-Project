@@ -9,7 +9,11 @@ const Login = () => {
 
   useEffect(() => {
     if (user) {
-      navigate("/dashboard", { replace: true });
+      if (user.profileCompleted) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/create-account", { replace: true });
+      }
     }
   }, [user, navigate]);
 
@@ -25,8 +29,12 @@ const Login = () => {
       callback: async (response) => {
         try {
           setError("");
-          await login(response.credential);
-          navigate("/dashboard", { replace: true });
+          const nextUser = await login(response.credential);
+          if (nextUser.profileCompleted) {
+            navigate("/dashboard", { replace: true });
+          } else {
+            navigate("/create-account", { replace: true });
+          }
         } catch (err) {
           setError(err.response?.data?.message || "Login failed");
         }

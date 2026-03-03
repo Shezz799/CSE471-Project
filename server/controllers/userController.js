@@ -6,6 +6,8 @@ const User = require("../models/User");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+const ALLOWED_SKILLS = ["python", "java", "c", "c++", "c#", "react","node", "angular", "vue", "django", "flask", "spring", "ruby on rails", "laravel", "flutter", "swift", "kotlin"];
+
 const signToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
@@ -27,6 +29,14 @@ const buildUserResponse = (user) => {
     id: user._id,
     name: user.name,
     email: user.email,
+    bio: user.bio,
+    skills: user.skills || [],
+    department: user.department,
+    phone: user.phone,
+    linkedinUrl: user.linkedinUrl,
+    githubUrl: user.githubUrl,
+    portfolioUrl: user.portfolioUrl,
+    profileCompleted: user.profileCompleted || false,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -60,6 +70,7 @@ exports.register = async (req, res) => {
       name,
       email,
       password: hashedPassword,
+      profileCompleted: false,
     });
 
     const token = signToken(user._id);
@@ -120,4 +131,49 @@ exports.profile = async (req, res) => {
       user: buildUserResponse(req.user),
     },
   });
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { bio, skills, department, phone, linkedinUrl, githubUrl, portfolioUrl } = req.body;
+
+    if (!bio || !department || !phone || !linkedinUrl || !githubUrl || !portfolioUrl) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+
+    if (!Array.isArray(skills) || skills.length === 0) {
+      return res.status(400).json({ success: false, message: "Select at least one skill" });
+    }
+
+    const normalizedSkills = skills.map((skill) => String(skill).toLowerCase());
+    const invalidSkill = normalizedSkills.find((skill) => !ALLOWED_SKILLS.includes(skill));
+    if (invalidSkill) {
+      return res.status(400).json({ success: false, message: "Invalid skill selection" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        bio,
+        skills: normalizedSkills,
+        department,
+        phone,
+        linkedinUrl,
+        githubUrl,
+        portfolioUrl,
+        profileCompleted: true,
+      },
+      { new: true, runValidators: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated",
+      data: {
+        user: buildUserResponse(user),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };

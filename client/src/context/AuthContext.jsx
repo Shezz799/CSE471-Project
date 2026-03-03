@@ -28,11 +28,18 @@ export const AuthProvider = ({ children }) => {
   const register = async (idToken) => {
     const { data } = await api.post("/api/users/register", { idToken });
     persistAuth(data.data.user, data.data.token);
+    return data.data.user;
   };
 
   const login = async (idToken) => {
     const { data } = await api.post("/api/users/login", { idToken });
     persistAuth(data.data.user, data.data.token);
+    return data.data.user;
+  };
+
+  const setUserProfile = (nextUser) => {
+    setUser(nextUser);
+    localStorage.setItem("user", JSON.stringify(nextUser));
   };
 
   const logout = () => {
@@ -60,7 +67,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const value = useMemo(
-    () => ({ user, token, loading, register, login, logout }),
+    () => ({ user, token, loading, register, login, logout, setUserProfile }),
     [user, token, loading]
   );
 

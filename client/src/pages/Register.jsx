@@ -10,7 +10,11 @@ const Register = () => {
 
   useEffect(() => {
     if (user) {
-      navigate("/dashboard", { replace: true });
+      if (user.profileCompleted) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/create-account", { replace: true });
+      }
     }
   }, [user, navigate]);
 
@@ -29,7 +33,7 @@ const Register = () => {
           setSuccess("");
           await register(response.credential);
           setSuccess("Account created successfully");
-          navigate("/dashboard", { replace: true });
+          navigate("/create-account", { replace: true });
         } catch (err) {
           setError(err.response?.data?.message || "Registration failed");
         }

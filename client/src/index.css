@@ -52,6 +52,77 @@ a {
   gap: 1rem;
 }
 
+.field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.label {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: #ffffff;
+}
+
+.input:focus {
+  outline: 2px solid rgba(15, 23, 42, 0.2);
+  border-color: #111827;
+}
+
+.multiselect {
+  position: relative;
+}
+
+.multiselect summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.multiselect summary::-webkit-details-marker {
+  display: none;
+}
+
+.multiselect summary::after {
+  content: "▾";
+  float: right;
+  color: #6b7280;
+}
+
+.multiselect[open] summary::after {
+  content: "▴";
+}
+
+.options {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin-top: 0.5rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+  z-index: 5;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #111827;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
