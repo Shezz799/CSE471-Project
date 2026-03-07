@@ -1,3 +1,4 @@
+console.log("Starting server...");
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
@@ -20,6 +21,7 @@ app.use(
 
 
 app.use("/api/users", require("./routes/userRoutes"));
+app.use("/api/posts", require("./routes/postRoutes"));
 
 const PORT = process.env.PORT || 5000;
 

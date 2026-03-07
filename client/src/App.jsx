@@ -6,8 +6,6 @@ import CreateAccount from "./pages/CreateAccount";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const App = () => {
-
-  
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
@@ -29,6 +27,7 @@ const App = () => {
           </ProtectedRoute>
         }
       />
+      <Route path="/feed" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
