@@ -37,6 +37,8 @@ const buildUserResponse = (user) => {
     githubUrl: user.githubUrl,
     portfolioUrl: user.portfolioUrl,
     profileCompleted: user.profileCompleted || false,
+    role: user.role || "user",
+    credits: user.credits != null ? user.credits : 5,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
