@@ -1,9 +1,35 @@
+import { useState } from "react";
+
+const SENTENCE_LIMIT = 2;
+
+function getFirstSentences(text, limit = SENTENCE_LIMIT) {
+  if (!text || typeof text !== "string") return "";
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const sentences = trimmed.split(/(?<=[.!?])\s+/);
+  if (sentences.length <= limit) return trimmed;
+  return sentences.slice(0, limit).join(" ").trim();
+}
+
+function hasMoreSentences(text, limit = SENTENCE_LIMIT) {
+  if (!text || typeof text !== "string") return false;
+  const sentences = text.trim().split(/(?<=[.!?])\s+/);
+  return sentences.length > limit;
+}
+
 const PostCard = ({ post, currentUser, onDelete }) => {
+  const [expanded, setExpanded] = useState(false);
   const authorName = post.author?.name || "Unknown";
   const authorId = post.author?._id || post.author;
   const isAuthor = currentUser && authorId && currentUser.id === authorId;
   const isAdmin = currentUser?.role === "admin";
   const canDelete = isAuthor || isAdmin;
+
+  const description = post.description || "";
+  const showExpand = hasMoreSentences(description);
+  const displayDescription = showExpand && !expanded
+    ? getFirstSentences(description)
+    : description;
 
   const timestamp = post.createdAt
     ? new Date(post.createdAt).toLocaleString("en-US", {
@@ -37,7 +63,16 @@ const PostCard = ({ post, currentUser, onDelete }) => {
       </div>
       <h3 className="post-card__subject">{post.subject}</h3>
       <p className="post-card__topic">Topic: {post.topic}</p>
-      <p className="post-card__description">{post.description}</p>
+      <p className="post-card__description">{displayDescription}</p>
+      {showExpand && (
+        <button
+          type="button"
+          className="post-card__toggle-details"
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {expanded ? "Minimize" : "Show Details"}
+        </button>
+      )}
       {post.creditsOffered > 0 && (
         <p className="post-card__credits">{post.creditsOffered} credits offered</p>
       )}

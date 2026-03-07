@@ -137,3 +137,9 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Local guides (do not push)
+BABY_STEPS_MUKTADIR_COMMITS_PRITHILA_MODULE1.md
+GIT_SWITCH_IDENTITY.md
+PUSH_PRITHILA_PART_AS_MINE.md
+MAKE_THE_PROJECT.md
