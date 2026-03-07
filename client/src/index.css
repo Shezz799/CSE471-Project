@@ -628,12 +628,14 @@ a {
   display: flex;
   min-height: 100vh;
   background: #f3f4f6;
+  width: 100%;
 }
 
 .skill-dashboard__feed {
-  width: 42%;
-  min-width: 300px;
-  max-width: 480px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: none;
   border-right: 1px solid #e5e7eb;
   background: #fff;
   display: flex;
@@ -643,7 +645,7 @@ a {
 
 @media (min-width: 900px) {
   .skill-dashboard__feed {
-    width: 42%;
+    width: auto;
   }
 }
 
@@ -746,20 +748,43 @@ a {
 
 /* Right panel — 55–60% */
 .skill-dashboard__panel {
-  flex: 1;
+  flex: 0 0 clamp(300px, 28vw, 420px);
+  width: clamp(300px, 28vw, 420px);
   min-width: 0;
-  padding: 1rem 1.5rem;
+  padding: 1.25rem;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 0.875rem;
-  max-width: 64%;
+  align-content: start;
+}
+
+.skill-dashboard__panel .card {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding: 1.2rem;
+}
+
+.skill-dashboard__profile {
+  grid-column: 1 / -1;
+}
+
+.skill-dashboard__logout {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 0.25rem;
 }
 
 @media (max-width: 768px) {
   .skill-dashboard__panel {
-    max-width: none;
+    grid-template-columns: 1fr;
     padding: 1rem;
+  }
+
+  .skill-dashboard__profile,
+  .skill-dashboard__logout {
+    grid-column: auto;
   }
 }
 
