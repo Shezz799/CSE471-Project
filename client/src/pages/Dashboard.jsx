@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { getPosts, createPost, deletePost } from "../api/posts";
+import { getPosts, createPost, deletePost, offerHelpToPost } from "../api/posts";
 import PostCard from "../components/PostCard";
 
 const Dashboard = () => {
@@ -65,6 +65,16 @@ const Dashboard = () => {
     setPosts((prev) => prev.filter((p) => p._id !== postId));
   };
 
+  const handleOfferHelp = async (postId) => {
+    try {
+      const { data } = await offerHelpToPost(postId);
+      // Replace the old post with the updated one
+      setPosts((prev) => prev.map((p) => (p._id === postId ? data.data : p)));
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to offer help");
+    }
+  };
+
   const myPosts = posts.filter((p) => (p.author?._id || p.author) === user?.id);
   const displayPosts = feedTab === "mine" ? myPosts : posts;
 
@@ -118,6 +128,7 @@ const Dashboard = () => {
                   post={post}
                   currentUser={user}
                   onDelete={handleDelete}
+                  onOfferHelp={handleOfferHelp}
                 />
               ))}
             </div>

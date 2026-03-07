@@ -6,6 +6,7 @@ const getPosts = async (req, res) => {
     const posts = await Post.find()
       .sort({ createdAt: -1 })
       .populate("author", "name email")
+      .populate("offers", "name email department skills")
       .lean();
     return res.status(200).json({ success: true, data: posts });
   } catch (error) {
@@ -32,6 +33,7 @@ const createPost = async (req, res) => {
     });
     const populated = await Post.findById(post._id)
       .populate("author", "name email")
+      .populate("offers", "name email department skills")
       .lean();
     return res.status(201).json({ success: true, data: populated });
   } catch (error) {
@@ -44,6 +46,7 @@ const getPostById = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
       .populate("author", "name email")
+      .populate("offers", "name email department skills")
       .lean();
     if (!post) {
       return res.status(404).json({ success: false, message: "Post not found" });
@@ -73,4 +76,39 @@ const deletePost = async (req, res) => {
   }
 };
 
-module.exports = { getPosts, createPost, getPostById, deletePost };
+// POST /api/posts/:id/offer - offer help on a post
+const offerHelp = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "Post not found" });
+    }
+    if (post.status !== "open") {
+      return res.status(400).json({ success: false, message: "This post is no longer open for help" });
+    }
+    if (post.author.toString() === req.user._id.toString()) {
+      return res.status(400).json({ success: false, message: "You cannot offer help on your own post" });
+    }
+    
+    const alreadyOffered = post.offers.some(
+      (offerId) => offerId.toString() === req.user._id.toString()
+    );
+    if (alreadyOffered) {
+      return res.status(400).json({ success: false, message: "You have already offered help for this post" });
+    }
+
+    post.offers.push(req.user._id);
+    await post.save();
+
+    const populated = await Post.findById(post._id)
+      .populate("author", "name email")
+      .populate("offers", "name email department skills")
+      .lean();
+
+    return res.status(200).json({ success: true, data: populated });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { getPosts, createPost, getPostById, deletePost, offerHelp };

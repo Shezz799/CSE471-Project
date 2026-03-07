@@ -31,6 +31,12 @@ const postSchema = new mongoose.Schema(
       enum: ["open", "in_progress", "closed"],
       default: "open",
     },
+    offers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );
