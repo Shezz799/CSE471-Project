@@ -529,8 +529,27 @@ a {
 .post-card__description {
   font-size: 0.95rem;
   color: #374151;
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
   line-height: 1.5;
+}
+
+.post-card__toggle-details {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #059669;
+  background: transparent;
+  border: 1px solid #059669;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.post-card__toggle-details:hover {
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .post-card__credits {

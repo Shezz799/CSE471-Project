@@ -79,7 +79,7 @@ const Dashboard = () => {
             className="button skill-dashboard__create-btn"
             onClick={() => setCreateModalOpen(true)}
           >
-            Create Post
+            Create help request
           </button>
         </div>
 
@@ -203,7 +203,7 @@ const Dashboard = () => {
       <div className={`skill-dashboard__modal ${createModalOpen ? "skill-dashboard__modal--open" : ""}`} role="dialog" aria-modal="true" aria-labelledby="create-post-title">
         <div className="skill-dashboard__modal-inner" onClick={(e) => e.stopPropagation()}>
           <div className="skill-dashboard__modal-header">
-            <h2 id="create-post-title" className="skill-dashboard__modal-title">Create a post</h2>
+            <h2 id="create-post-title" className="skill-dashboard__modal-title">Create a help request</h2>
             <button type="button" className="skill-dashboard__modal-close" onClick={closeCreateModal} aria-label="Close">
               ×
             </button>
