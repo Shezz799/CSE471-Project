@@ -41,7 +41,7 @@ const Register = () => {
     });
 
     google.accounts.id.renderButton(document.getElementById("google-register"), {
-      theme: "outline",
+      theme: "filled_blue",
       size: "large",
       width: 360,
     });
@@ -50,19 +50,25 @@ const Register = () => {
   }, [register, navigate]);
 
   return (
-    <div className="page">
-      <div className="card stack">
-        <div>
-          <h1 className="title">Create account</h1>
-          <p className="subtitle">Use your BRACU Google account to join.</p>
+    <div className="auth-page">
+      <section className="auth-hero">
+        <h1 className="auth-hero__title">Micro SkillShare Platform</h1>
+        <p className="auth-hero__subtitle">Collaborate, ask for help, and share your expertise with your peers.</p>
+      </section>
+
+      <section className="auth-panel-wrap">
+        <div className="auth-panel">
+          <h1 className="auth-panel__title">Create account</h1>
+          <p className="auth-panel__subtitle">Sign up with your institution&apos;s G-Suite account</p>
+          {error && <div className="error">{error}</div>}
+          {success && <div className="success">{success}</div>}
+          <div className="auth-google" id="google-register"></div>
+          <div className="auth-panel__link-row">
+            Already have an account? <Link to="/login">sign in</Link>
+          </div>
+          <p className="auth-panel__footnote">Secure Authentication via Google</p>
         </div>
-        {error && <div className="error">{error}</div>}
-        {success && <div className="success">{success}</div>}
-        <div id="google-register"></div>
-        <div className="link-row">
-          Already have an account? <Link to="/login">Sign in</Link>
-        </div>
-      </div>
+      </section>
     </div>
   );
 };
