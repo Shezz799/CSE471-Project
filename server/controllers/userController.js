@@ -6,7 +6,7 @@ const User = require("../models/User");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-const ALLOWED_SKILLS = ["python", "java", "c", "c++", "c#", "react","node", "angular", "vue", "django", "flask", "spring", "ruby on rails", "laravel", "flutter", "swift", "kotlin"];
+const ALLOWED_SKILLS = ["python", "java", "c", "c++", "c#", "react"];
 
 const signToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -37,6 +37,8 @@ const buildUserResponse = (user) => {
     githubUrl: user.githubUrl,
     portfolioUrl: user.portfolioUrl,
     profileCompleted: user.profileCompleted || false,
+    role: user.role || "user",
+    credits: user.credits != null ? user.credits : 5,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
