@@ -1655,6 +1655,8 @@ a {
 }
 
 .chat-input {
+  grid-column: 1 / 2;
+  grid-row: 1;
   width: 100%;
   border-radius: 12px;
   border: 1px solid var(--chat-border);
@@ -1682,11 +1684,18 @@ a {
 }
 
 .chat-send-btn {
+  grid-column: 2 / 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: end;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   background: linear-gradient(135deg, var(--chat-accent-start), var(--chat-accent-end));
   color: #fff;
-  padding: 0.72rem 1rem;
+  padding: 0.5rem 0.78rem;
+  font-size: 0.84rem;
+  line-height: 1;
+  font-weight: 600;
   cursor: pointer;
 }
 
