@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getPosts, createPost, deletePost, offerHelpToPost } from "../api/posts";
 import PostCard from "../components/PostCard";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,7 +13,6 @@ const Dashboard = () => {
   const [feedTab, setFeedTab] = useState("all"); // "all" | "mine"
   const [form, setForm] = useState({ subject: "", topic: "", description: "", creditsOffered: "" });
   const [submitting, setSubmitting] = useState(false);
-  const [messagesOpen, setMessagesOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const loadPosts = async () => {
@@ -155,7 +156,7 @@ const Dashboard = () => {
           <button
             type="button"
             className="skill-dashboard__action-btn"
-            onClick={() => setMessagesOpen(true)}
+            onClick={() => navigate("/messages")}
           >
             <span className="skill-dashboard__action-icon" aria-hidden>✉</span>
             Messages
@@ -194,19 +195,6 @@ const Dashboard = () => {
       </aside>
 
       {/* Messages drawer placeholder */}
-      {messagesOpen && (
-        <div className="skill-dashboard__drawer-overlay" onClick={() => setMessagesOpen(false)} aria-hidden />
-      )}
-      <div className={`skill-dashboard__drawer ${messagesOpen ? "skill-dashboard__drawer--open" : ""}`}>
-        <div className="skill-dashboard__drawer-header">
-          <h2>Messages</h2>
-          <button type="button" className="skill-dashboard__drawer-close" onClick={() => setMessagesOpen(false)}>
-            ×
-          </button>
-        </div>
-        <p className="skill-dashboard__placeholder">Messaging will be available in a future module.</p>
-      </div>
-
       {/* Create Post modal */}
       {createModalOpen && (
         <div className="skill-dashboard__modal-overlay" onClick={closeCreateModal} aria-hidden />

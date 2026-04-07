@@ -1,13 +1,16 @@
 console.log("Starting server...");
 const express = require("express");
+const http = require("http");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const connectDB = require("./config/db");
+const { initSocketServer } = require("./socket/socketServer");
 
 dotenv.config();
 connectDB();
 
 const app = express();
+const server = http.createServer(app);
 
 
 app.use(express.json());
@@ -22,9 +25,14 @@ app.use(
 
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/posts", require("./routes/postRoutes"));
+app.use("/api/invite", require("./routes/inviteRoutes"));
+app.use("/api/chats", require("./routes/chatRoutes"));
+app.use("/api/messages", require("./routes/messageRoutes"));
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+initSocketServer(server);
+
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
