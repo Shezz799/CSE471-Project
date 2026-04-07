@@ -11,8 +11,6 @@ import {
   uploadMessageWithFile,
 } from "../api/chat";
 import { connectChatSocket, disconnectChatSocket, getChatSocket } from "../socket/chatSocket";
-import UserListPanel from "../components/chat/UserListPanel";
-import InvitePanel from "../components/chat/InvitePanel";
 import ConversationPanel from "../components/chat/ConversationPanel";
 
 const Messages = () => {
@@ -30,6 +28,8 @@ const Messages = () => {
   const [onlineMap, setOnlineMap] = useState(new Map());
   const [invitedUserIds, setInvitedUserIds] = useState(new Set());
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState("chats");
+  const [sidebarQuery, setSidebarQuery] = useState("");
 
   const activeChatIdRef = useRef("");
   const chatsRef = useRef([]);
@@ -47,6 +47,33 @@ const Messages = () => {
   const activeSkills = Array.isArray(activeOtherParticipant?.skills)
     ? activeOtherParticipant.skills.filter(Boolean)
     : [];
+
+  const normalizedSidebarQuery = sidebarQuery.trim().toLowerCase();
+
+  const filteredChats = useMemo(() => {
+    return chats.filter((chat) => {
+      const otherParticipant = chat.participants?.find((participant) => participant._id !== user.id);
+      const searchable = `${otherParticipant?.name || ""} ${otherParticipant?.email || ""}`.toLowerCase();
+      return !normalizedSidebarQuery || searchable.includes(normalizedSidebarQuery);
+    });
+  }, [chats, user.id, normalizedSidebarQuery]);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((targetUser) => {
+      if (targetUser._id === user.id) return false;
+      const searchable = `${targetUser.name || ""} ${targetUser.email || ""}`.toLowerCase();
+      return !normalizedSidebarQuery || searchable.includes(normalizedSidebarQuery);
+    });
+  }, [users, user.id, normalizedSidebarQuery]);
+
+  const filteredInvites = useMemo(() => {
+    return invites.filter((invite) => {
+      const senderName = invite.senderId?.name || "";
+      const senderEmail = invite.senderId?.email || "";
+      const searchable = `${senderName} ${senderEmail}`.toLowerCase();
+      return !normalizedSidebarQuery || searchable.includes(normalizedSidebarQuery);
+    });
+  }, [invites, normalizedSidebarQuery]);
 
   const loadInitial = async () => {
     try {
@@ -216,30 +243,148 @@ const Messages = () => {
           </button>
         </div>
 
-        <InvitePanel invites={invites} onRespond={handleRespondInvite} />
+        <div className="chat-sidebar-top">
+          <input
+            type="text"
+            className="chat-sidebar-search"
+            placeholder="Search chats, people, invites"
+            value={sidebarQuery}
+            onChange={(event) => setSidebarQuery(event.target.value)}
+          />
 
-        <div className="chat-list-box">
-          <h3 className="chat-section-title">Chats</h3>
-          {chats.map((chat) => {
-            const otherParticipant = chat.participants?.find((participant) => participant._id !== user.id);
-            return (
+          <div className="chat-sidebar-tabs" role="tablist" aria-label="Message sidebar tabs">
+            {[
+              { id: "chats", label: "Chats" },
+              { id: "people", label: "People" },
+              { id: "invites", label: "Invites" },
+            ].map((tab) => (
               <button
+                key={tab.id}
                 type="button"
-                key={chat._id}
-                className={`chat-list-item ${chat._id === activeChatId ? "chat-list-item--active" : ""}`}
-                onClick={() => setActiveChatId(chat._id)}
+                role="tab"
+                aria-selected={sidebarTab === tab.id}
+                className={`chat-sidebar-tab ${sidebarTab === tab.id ? "is-active" : ""}`}
+                onClick={() => setSidebarTab(tab.id)}
               >
-                <div>
-                  <p className="chat-user-name">{otherParticipant?.name || "Chat"}</p>
-                  <p className="chat-user-meta">{otherParticipant?.email || ""}</p>
-                </div>
-                <span className={`chat-presence-dot ${onlineMap.get(otherParticipant?._id) ? "is-online" : ""}`} />
+                {tab.label}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
-        <UserListPanel users={users} onInvite={handleInvite} invitedUserIds={invitedUserIds} />
+        <div className="chat-sidebar-list">
+          {sidebarTab === "chats" && (
+            filteredChats.length > 0 ? (
+              filteredChats.map((chat) => {
+                const otherParticipant = chat.participants?.find((participant) => participant._id !== user.id);
+                const isOnline = Boolean(onlineMap.get(otherParticipant?._id));
+                const displayName = otherParticipant?.name || "Chat";
+
+                return (
+                  <button
+                    type="button"
+                    key={chat._id}
+                    className={`chat-sidebar-item chat-sidebar-item--interactive ${chat._id === activeChatId ? "is-active" : ""}`}
+                    onClick={() => setActiveChatId(chat._id)}
+                  >
+                    <div className="chat-sidebar-item-main">
+                      <div className="chat-sidebar-avatar-wrap">
+                        <span className="chat-sidebar-avatar">{displayName.charAt(0).toUpperCase()}</span>
+                        <span className={`chat-sidebar-online-dot ${isOnline ? "is-online" : ""}`} />
+                      </div>
+
+                      <div className="chat-sidebar-item-text">
+                        <p className="chat-user-name">{displayName}</p>
+                        <p className="chat-user-meta">{otherParticipant?.email || "Tap to open chat"}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="chat-empty-text">No chats found.</p>
+            )
+          )}
+
+          {sidebarTab === "people" && (
+            filteredUsers.length > 0 ? (
+              filteredUsers.map((targetUser) => {
+                const isOnline = Boolean(onlineMap.get(targetUser._id));
+
+                return (
+                  <div className="chat-sidebar-item" key={targetUser._id}>
+                    <div className="chat-sidebar-item-main">
+                      <div className="chat-sidebar-avatar-wrap">
+                        <span className="chat-sidebar-avatar">{targetUser.name?.charAt(0)?.toUpperCase() || "?"}</span>
+                        <span className={`chat-sidebar-online-dot ${isOnline ? "is-online" : ""}`} />
+                      </div>
+
+                      <div className="chat-sidebar-item-text">
+                        <p className="chat-user-name">{targetUser.name}</p>
+                        <p className="chat-user-meta">{targetUser.email}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="chat-sidebar-invite-btn"
+                      disabled={invitedUserIds.has(targetUser._id)}
+                      onClick={() => handleInvite(targetUser._id)}
+                    >
+                      {invitedUserIds.has(targetUser._id) ? "Invited" : "Invite"}
+                    </button>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="chat-empty-text">No people found.</p>
+            )
+          )}
+
+          {sidebarTab === "invites" && (
+            filteredInvites.length > 0 ? (
+              filteredInvites.map((invite) => {
+                const sender = invite.senderId;
+                const isOnline = Boolean(onlineMap.get(sender?._id));
+
+                return (
+                  <div className="chat-sidebar-item chat-sidebar-item--invite" key={invite._id}>
+                    <div className="chat-sidebar-item-main">
+                      <div className="chat-sidebar-avatar-wrap">
+                        <span className="chat-sidebar-avatar">{sender?.name?.charAt(0)?.toUpperCase() || "?"}</span>
+                        <span className={`chat-sidebar-online-dot ${isOnline ? "is-online" : ""}`} />
+                      </div>
+
+                      <div className="chat-sidebar-item-text">
+                        <p className="chat-user-name">{sender?.name || "A user"}</p>
+                        <p className="chat-user-meta">{sender?.email || "Wants to chat"}</p>
+                      </div>
+                    </div>
+
+                    <div className="chat-sidebar-item-actions">
+                      <button
+                        type="button"
+                        className="chat-accept-btn"
+                        onClick={() => handleRespondInvite(invite._id, "accepted")}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-reject-btn"
+                        onClick={() => handleRespondInvite(invite._id, "rejected")}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="chat-empty-text">No pending invites.</p>
+            )
+          )}
+        </div>
       </aside>
 
       <main className="chat-middle-pane">
