@@ -135,6 +135,28 @@ exports.profile = async (req, res) => {
   });
 };
 
+exports.lookupByEmail = async (req, res) => {
+  try {
+    const email = (req.query.email || "").trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Query parameter email is required" });
+    }
+    const found = await User.findOne({ email }).select("_id name email");
+    if (!found) {
+      return res.status(404).json({ success: false, message: "No user with that email" });
+    }
+    if (found._id.equals(req.user._id)) {
+      return res.status(400).json({ success: false, message: "That is your own email" });
+    }
+    return res.status(200).json({
+      success: true,
+      data: { id: found._id, name: found.name, email: found.email },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.updateProfile = async (req, res) => {
   try {
     const { bio, skills, department, phone, linkedinUrl, githubUrl, portfolioUrl } = req.body;

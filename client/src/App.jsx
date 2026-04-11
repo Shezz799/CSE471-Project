@@ -4,6 +4,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import CreateAccount from "./pages/CreateAccount";
 import Messages from "./pages/Messages";
+import RateMentor from "./pages/RateMentor";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const App = () => {
@@ -33,6 +34,14 @@ const App = () => {
         element={
           <ProtectedRoute>
             <Messages />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reviews"
+        element={
+          <ProtectedRoute>
+            <RateMentor />
           </ProtectedRoute>
         }
       />

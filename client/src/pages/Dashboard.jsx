@@ -163,6 +163,17 @@ const Dashboard = () => {
           </button>
         </div>
 
+        <div className="skill-dashboard__action card">
+          <button
+            type="button"
+            className="skill-dashboard__action-btn"
+            onClick={() => navigate("/reviews")}
+          >
+            <span className="skill-dashboard__action-icon" aria-hidden>⭐</span>
+            Ratings &amp; reviews
+          </button>
+        </div>
+
         {/* Find Experts — placeholder */}
         <div className="skill-dashboard__action card">
           <button type="button" className="skill-dashboard__action-btn" disabled>
