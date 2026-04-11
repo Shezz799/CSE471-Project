@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import api from "../api/axios";
+import { disconnectChatSocket } from "../socket/chatSocket";
 
 const AuthContext = createContext(null);
 
@@ -43,6 +44,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    disconnectChatSocket();
     clearAuth();
   };
 

@@ -1,4 +1,5 @@
 const Post = require("../models/Post");
+const { attachRatingSummariesToPosts } = require("../services/reviewStats");
 
 // GET /api/posts - list all posts (skill share feed)
 const getPosts = async (req, res) => {
@@ -8,6 +9,7 @@ const getPosts = async (req, res) => {
       .populate("author", "name email")
       .populate("offers", "name email department skills")
       .lean();
+    await attachRatingSummariesToPosts(posts);
     return res.status(200).json({ success: true, data: posts });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -35,6 +37,7 @@ const createPost = async (req, res) => {
       .populate("author", "name email")
       .populate("offers", "name email department skills")
       .lean();
+    await attachRatingSummariesToPosts([populated]);
     return res.status(201).json({ success: true, data: populated });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -51,6 +54,7 @@ const getPostById = async (req, res) => {
     if (!post) {
       return res.status(404).json({ success: false, message: "Post not found" });
     }
+    await attachRatingSummariesToPosts([post]);
     return res.status(200).json({ success: true, data: post });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -104,7 +108,7 @@ const offerHelp = async (req, res) => {
       .populate("author", "name email")
       .populate("offers", "name email department skills")
       .lean();
-
+    await attachRatingSummariesToPosts([populated]);
     return res.status(200).json({ success: true, data: populated });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

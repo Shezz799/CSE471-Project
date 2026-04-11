@@ -11,6 +11,9 @@ const COMPLAINT_CATEGORIES = [
 
 const COMPLAINT_STATUSES = ["open", "in_progress", "resolved", "dismissed"];
 
+/** Admin pipeline labels: received → under review → result */
+const COMPLAINT_PIPELINE_STAGES = ["received", "under_review", "result"];
+
 const complaintSchema = new mongoose.Schema(
   {
     complainant: {
@@ -45,6 +48,17 @@ const complaintSchema = new mongoose.Schema(
       enum: COMPLAINT_STATUSES,
       default: "open",
     },
+    pipelineStage: {
+      type: String,
+      enum: COMPLAINT_PIPELINE_STAGES,
+      default: "received",
+    },
+    complainantMessage: {
+      type: String,
+      trim: true,
+      maxlength: 2000,
+      default: "",
+    },
     adminNotes: {
       type: String,
       trim: true,
@@ -62,3 +76,4 @@ const complaintSchema = new mongoose.Schema(
 module.exports = mongoose.model("Complaint", complaintSchema);
 module.exports.COMPLAINT_CATEGORIES = COMPLAINT_CATEGORIES;
 module.exports.COMPLAINT_STATUSES = COMPLAINT_STATUSES;
+module.exports.COMPLAINT_PIPELINE_STAGES = COMPLAINT_PIPELINE_STAGES;

@@ -1,8 +1,11 @@
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
+const { getFullReviewStatsForUser } = require("../services/reviewStats");
+const { isDashboardAdminUser } = require("../utils/adminAccess");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -39,6 +42,8 @@ const buildUserResponse = (user) => {
     profileCompleted: user.profileCompleted || false,
     role: user.role || "user",
     credits: user.credits != null ? user.credits : 5,
+    accountStatus: user.accountStatus || "active",
+    isDashboardAdmin: isDashboardAdminUser(user),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -110,6 +115,22 @@ exports.login = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    const acct = user.accountStatus || "active";
+    if (acct === "suspended") {
+      return res.status(403).json({
+        success: false,
+        code: "ACCOUNT_SUSPENDED",
+        message: "Your account is suspended. Check your university email for instructions.",
+      });
+    }
+    if (acct === "banned") {
+      return res.status(403).json({
+        success: false,
+        code: "ACCOUNT_BANNED",
+        message: "Your account is banned. Check your university email for instructions.",
+      });
+    }
+
     const token = signToken(user._id);
 
     return res.status(200).json({
@@ -133,6 +154,39 @@ exports.profile = async (req, res) => {
       user: buildUserResponse(req.user),
     },
   });
+};
+
+exports.getPublicProfile = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ success: false, message: "Invalid user id" });
+    }
+    const found = await User.findById(userId)
+      .select("name email department bio skills profileCompleted")
+      .lean();
+    if (!found) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    const reviewStats = await getFullReviewStatsForUser(userId);
+    return res.status(200).json({
+      success: true,
+      data: {
+        user: {
+          id: found._id,
+          name: found.name,
+          email: found.email,
+          department: found.department,
+          bio: found.bio,
+          skills: found.skills || [],
+          profileCompleted: found.profileCompleted || false,
+        },
+        reviewStats,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 exports.lookupByEmail = async (req, res) => {

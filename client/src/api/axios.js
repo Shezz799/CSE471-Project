@@ -22,6 +22,16 @@ api.interceptors.response.use(
         window.location.assign("/login");
       }
     }
+    if (error.response && error.response.status === 403) {
+      const code = error.response?.data?.code;
+      if (code === "ACCOUNT_SUSPENDED" || code === "ACCOUNT_BANNED") {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        if (window.location.pathname !== "/login") {
+          window.location.assign("/login");
+        }
+      }
+    }
     return Promise.reject(error);
   }
 );

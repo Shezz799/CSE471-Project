@@ -52,6 +52,41 @@ const userSchema = new mongoose.Schema({
     enum: ["user", "admin"],
     default: "user",
   },
+  accountStatus: {
+    type: String,
+    enum: ["active", "suspended", "banned"],
+    default: "active",
+  },
+  lastModerationAt: {
+    type: Date,
+    default: null,
+  },
+  moderationReason: {
+    type: String,
+    trim: true,
+    maxlength: 2000,
+    default: "",
+  },
+  moderationAppealToken: {
+    type: String,
+    default: null,
+    select: false,
+  },
+  moderationAppealExpiresAt: {
+    type: Date,
+    default: null,
+    select: false,
+  },
+  appealPending: {
+    type: Boolean,
+    default: false,
+  },
+  appealMessage: {
+    type: String,
+    trim: true,
+    maxlength: 4000,
+    default: "",
+  },
   credits: {
     type: Number,
     default: 5,

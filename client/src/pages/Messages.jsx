@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   fetchChats,
@@ -10,11 +10,14 @@ import {
   sendInvite,
   uploadMessageWithFile,
 } from "../api/chat";
-import { connectChatSocket, disconnectChatSocket, getChatSocket } from "../socket/chatSocket";
+import { connectChatSocket, getChatSocket } from "../socket/chatSocket";
 import ConversationPanel from "../components/chat/ConversationPanel";
+import StarAverage from "../components/ratings/StarAverage";
+import { getReviewStats, getReviewsForUser } from "../api/reviews";
 
 const Messages = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, token } = useAuth();
 
   const [users, setUsers] = useState([]);
@@ -30,9 +33,14 @@ const Messages = () => {
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState("chats");
   const [sidebarQuery, setSidebarQuery] = useState("");
+  const [profileStats, setProfileStats] = useState(null);
+  const [profileReviews, setProfileReviews] = useState([]);
+  const [profileRatingsLoading, setProfileRatingsLoading] = useState(false);
+  const [listsReady, setListsReady] = useState(false);
 
   const activeChatIdRef = useRef("");
   const chatsRef = useRef([]);
+  const lastHandledWithParam = useRef("");
 
   const activeChat = useMemo(
     () => chats.find((chat) => chat._id === activeChatId) || null,
@@ -88,6 +96,8 @@ const Messages = () => {
       setInvites(invitesRes.data.data || []);
     } catch (error) {
       console.error(error);
+    } finally {
+      setListsReady(true);
     }
   };
 
@@ -100,6 +110,56 @@ const Messages = () => {
   useEffect(() => {
     loadInitial();
   }, []);
+
+  useEffect(() => {
+    const withId = searchParams.get("with");
+    if (!withId) {
+      lastHandledWithParam.current = "";
+      return;
+    }
+    if (!listsReady || !user?.id) return;
+    if (lastHandledWithParam.current === withId) return;
+    lastHandledWithParam.current = withId;
+
+    const clearWithParam = () => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("with");
+          return next;
+        },
+        { replace: true }
+      );
+    };
+
+    if (String(withId) === String(user.id)) {
+      clearWithParam();
+      return;
+    }
+
+    const chat = chats.find((c) => {
+      const other = c.participants?.find((participant) => String(participant._id) !== String(user.id));
+      return String(other?._id) === String(withId);
+    });
+
+    if (chat) {
+      setActiveChatId(chat._id);
+      setSidebarTab("chats");
+    } else {
+      setSidebarTab("people");
+      sendInvite(withId)
+        .then(() => {
+          setInvitedUserIds((prev) => {
+            const next = new Set(prev);
+            next.add(withId);
+            return next;
+          });
+        })
+        .catch(() => {});
+    }
+
+    clearWithParam();
+  }, [listsReady, chats, searchParams, user?.id, setSearchParams]);
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId;
@@ -115,11 +175,11 @@ const Messages = () => {
     const socket = connectChatSocket(token);
     if (!socket) return;
 
-    socket.on("invite:received", (invite) => {
+    const onInviteReceived = (invite) => {
       setInvites((prev) => [invite, ...prev]);
-    });
+    };
 
-    socket.on("invite:updated", ({ invite, chat }) => {
+    const onInviteUpdated = ({ invite, chat }) => {
       if (invite.status !== "pending") {
         setInvites((prev) => prev.filter((item) => item._id !== invite._id));
       }
@@ -129,30 +189,30 @@ const Messages = () => {
           return exists ? prev : [chat, ...prev];
         });
       }
-    });
+    };
 
-    socket.on("chat:created", (chat) => {
+    const onChatCreated = (chat) => {
       setChats((prev) => {
         const exists = prev.some((item) => item._id === chat._id);
         return exists ? prev : [chat, ...prev];
       });
-    });
+    };
 
-    socket.on("message:new", (message) => {
+    const onMessageNew = (message) => {
       if (String(message.chatId) === String(activeChatIdRef.current)) {
         setMessages((prev) => [...prev, message]);
       }
-    });
+    };
 
-    socket.on("presence:update", ({ userId, online }) => {
+    const onPresenceUpdate = ({ userId, online }) => {
       setOnlineMap((prev) => {
         const next = new Map(prev);
         next.set(userId, online);
         return next;
       });
-    });
+    };
 
-    socket.on("chat:typing", ({ chatId, userId, isTyping }) => {
+    const onChatTyping = ({ chatId, userId, isTyping }) => {
       if (String(activeChatIdRef.current) !== String(chatId)) return;
       if (!isTyping) {
         setTypingUser("");
@@ -161,11 +221,22 @@ const Messages = () => {
       const currentChat = chatsRef.current.find((chat) => chat._id === chatId);
       const participant = currentChat?.participants?.find((item) => item._id === userId);
       setTypingUser(participant?.name || "Someone");
-    });
+    };
+
+    socket.on("invite:received", onInviteReceived);
+    socket.on("invite:updated", onInviteUpdated);
+    socket.on("chat:created", onChatCreated);
+    socket.on("message:new", onMessageNew);
+    socket.on("presence:update", onPresenceUpdate);
+    socket.on("chat:typing", onChatTyping);
 
     return () => {
-      socket.removeAllListeners();
-      disconnectChatSocket();
+      socket.off("invite:received", onInviteReceived);
+      socket.off("invite:updated", onInviteUpdated);
+      socket.off("chat:created", onChatCreated);
+      socket.off("message:new", onMessageNew);
+      socket.off("presence:update", onPresenceUpdate);
+      socket.off("chat:typing", onChatTyping);
     };
   }, [token]);
 
@@ -179,6 +250,41 @@ const Messages = () => {
   useEffect(() => {
     setIsProfileDrawerOpen(false);
   }, [activeChatId]);
+
+  const activeOtherUserId = activeOtherParticipant?._id || activeOtherParticipant?.id;
+
+  useEffect(() => {
+    if (!activeOtherUserId) {
+      setProfileStats(null);
+      setProfileReviews([]);
+      return;
+    }
+    let cancelled = false;
+    setProfileRatingsLoading(true);
+    (async () => {
+      const id = String(activeOtherUserId);
+      try {
+        const [statsRes, revRes] = await Promise.all([
+          getReviewStats(id),
+          getReviewsForUser(id, { limit: 5 }),
+        ]);
+        if (!cancelled) {
+          setProfileStats(statsRes.data.data);
+          setProfileReviews(revRes.data.data || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setProfileStats(null);
+          setProfileReviews([]);
+        }
+      } finally {
+        if (!cancelled) setProfileRatingsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOtherUserId]);
 
   const handleInvite = async (receiverId) => {
     await sendInvite(receiverId);
@@ -463,6 +569,54 @@ const Messages = () => {
               <p className="chat-empty-text">No skills added yet.</p>
             )}
           </div>
+        </div>
+
+        <div className="chat-profile-info">
+          <h4>Ratings</h4>
+          {!activeOtherParticipant && <p className="chat-empty-text">—</p>}
+          {activeOtherParticipant && profileRatingsLoading && (
+            <p className="chat-empty-text">Loading…</p>
+          )}
+          {activeOtherParticipant && !profileRatingsLoading && profileStats?.reviewCount > 0 && (
+            <>
+              <div className="chat-profile-rating-row">
+                <StarAverage average={profileStats.averageRating} size="md" />
+                <span className="chat-profile-rating-meta">
+                  {profileStats.averageRating != null ? profileStats.averageRating.toFixed(1) : "—"} ·{" "}
+                  {profileStats.reviewCount} rating{profileStats.reviewCount === 1 ? "" : "s"}
+                </span>
+              </div>
+              {profileStats.helpsOfferedCount != null && (
+                <p className="chat-profile-helps-offered">
+                  Offered help on {profileStats.helpsOfferedCount} request
+                  {profileStats.helpsOfferedCount === 1 ? "" : "s"}
+                </p>
+              )}
+              {profileReviews.length > 0 && (
+                <ul className="chat-profile-mini-reviews">
+                  {profileReviews.slice(0, 3).map((r) => (
+                    <li key={r._id}>
+                      <strong>{r.rating}★</strong> {r.reviewer?.name || "Peer"}
+                      {r.comment ? (
+                        <span className="chat-profile-mini-review-text"> — {r.comment}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+          {activeOtherParticipant && !profileRatingsLoading && (!profileStats || profileStats.reviewCount === 0) && (
+            <p className="chat-empty-text">No ratings yet.</p>
+          )}
+          {activeOtherParticipant && (
+            <Link
+              to={`/profile/${String(activeOtherUserId)}`}
+              className="chat-profile-full-link"
+            >
+              Full profile &amp; all reviews
+            </Link>
+          )}
         </div>
       </aside>
 

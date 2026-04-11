@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import StarAverage from "./ratings/StarAverage";
 
 const SENTENCE_LIMIT = 2;
 
@@ -23,8 +25,8 @@ const PostCard = ({ post, currentUser, onDelete, onOfferHelp }) => {
   const authorName = post.author?.name || "Unknown";
   const authorId = post.author?._id || post.author;
   const isAuthor = currentUser && authorId && currentUser.id === authorId;
-  const isAdmin = currentUser?.role === "admin";
-  const canDelete = isAuthor || isAdmin;
+  const isPanelAdmin = currentUser?.isDashboardAdmin;
+  const canDelete = isAuthor || isPanelAdmin;
 
   // Determine if the current user has already offered help
   const alreadyOffered = Array.isArray(post.offers) && post.offers.some(
@@ -125,13 +127,28 @@ const PostCard = ({ post, currentUser, onDelete, onOfferHelp }) => {
         <div className="post-card__offers">
           <h4 className="post-card__offers-title">Offers of Help ({post.offers.length})</h4>
           <ul className="post-card__offer-list">
-            {post.offers.map((offer) => (
-              <li key={offer._id || offer} className="post-card__offer-item">
-                <span className="post-card__offer-name">{offer.name || "Unknown Mentor"}</span>
-                {offer.department && <span className="post-card__offer-dept"> • {offer.department}</span>}
-                {offer.email && <span className="post-card__offer-email"> ({offer.email})</span>}
-              </li>
-            ))}
+            {post.offers.map((offer) => {
+              const oid = offer._id || offer;
+              const avg = offer.ratingSummary?.averageRating;
+              return (
+                <li key={oid} className="post-card__offer-item">
+                  <span className="post-card__offer-main">
+                    <Link to={`/profile/${oid}`} className="post-card__offer-name post-card__offer-name-link">
+                      {offer.name || "Unknown Mentor"}
+                    </Link>
+                    {typeof avg === "number" && !Number.isNaN(avg) && (
+                      <StarAverage average={avg} size="sm" className="post-card__offer-stars" />
+                    )}
+                    {offer.department && (
+                      <span className="post-card__offer-dept">• {offer.department}</span>
+                    )}
+                    {offer.email && (
+                      <span className="post-card__offer-email">({offer.email})</span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

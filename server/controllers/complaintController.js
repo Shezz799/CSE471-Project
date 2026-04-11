@@ -2,7 +2,12 @@ const mongoose = require("mongoose");
 const Complaint = require("../models/Complaint");
 const User = require("../models/User");
 const Post = require("../models/Post");
-const { COMPLAINT_CATEGORIES, COMPLAINT_STATUSES } = require("../models/Complaint");
+const {
+  COMPLAINT_CATEGORIES,
+  COMPLAINT_STATUSES,
+  COMPLAINT_PIPELINE_STAGES,
+} = require("../models/Complaint");
+const { sendMail } = require("../utils/mail");
 
 exports.createComplaint = async (req, res) => {
   try {
@@ -104,9 +109,17 @@ exports.listMine = async (req, res) => {
 exports.listAll = async (req, res) => {
   try {
     const statusFilter = req.query.status;
+    const pipelineFilter = req.query.pipelineStage;
     const query = {};
     if (statusFilter && COMPLAINT_STATUSES.includes(statusFilter)) {
       query.status = statusFilter;
+    }
+    if (pipelineFilter && COMPLAINT_PIPELINE_STAGES.includes(pipelineFilter)) {
+      if (pipelineFilter === "received") {
+        query.$or = [{ pipelineStage: "received" }, { pipelineStage: { $exists: false } }];
+      } else {
+        query.pipelineStage = pipelineFilter;
+      }
     }
     const list = await Complaint.find(query)
       .sort({ createdAt: -1 })
@@ -120,13 +133,33 @@ exports.listAll = async (req, res) => {
   }
 };
 
+exports.getOne = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid complaint id" });
+    }
+    const doc = await Complaint.findById(id)
+      .populate("complainant", "name email")
+      .populate("subjectUser", "name email")
+      .populate("post", "subject topic")
+      .lean();
+    if (!doc) {
+      return res.status(404).json({ success: false, message: "Complaint not found" });
+    }
+    return res.status(200).json({ success: true, data: doc });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.updateComplaint = async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ success: false, message: "Invalid complaint id" });
     }
-    const { status, adminNotes } = req.body;
+    const { status, adminNotes, pipelineStage, complainantMessage, notifyComplainant } = req.body;
 
     const complaint = await Complaint.findById(id);
     if (!complaint) {
@@ -156,6 +189,24 @@ exports.updateComplaint = async (req, res) => {
       complaint.adminNotes = notes;
     }
 
+    if (pipelineStage != null) {
+      if (!COMPLAINT_PIPELINE_STAGES.includes(pipelineStage)) {
+        return res.status(400).json({ success: false, message: "Invalid pipeline stage" });
+      }
+      complaint.pipelineStage = pipelineStage;
+    }
+
+    if (complainantMessage != null) {
+      const msg = typeof complainantMessage === "string" ? complainantMessage.trim() : "";
+      if (msg.length > 2000) {
+        return res.status(400).json({
+          success: false,
+          message: "Complainant message must be at most 2000 characters",
+        });
+      }
+      complaint.complainantMessage = msg;
+    }
+
     await complaint.save();
 
     const populated = await Complaint.findById(complaint._id)
@@ -163,6 +214,26 @@ exports.updateComplaint = async (req, res) => {
       .populate("subjectUser", "name email")
       .populate("post", "subject topic")
       .lean();
+
+    if (notifyComplainant === true && populated.complainant?.email) {
+      const lines = [
+        `Hello ${populated.complainant.name || ""},`,
+        "",
+        "There is an update on your complaint submitted to the platform team.",
+        "",
+        `Current status: ${populated.status}`,
+        `Stage: ${populated.pipelineStage || "received"}`,
+      ];
+      if (populated.complainantMessage) {
+        lines.push("", "Message from the team:", populated.complainantMessage);
+      }
+      lines.push("", "— Platform administrators");
+      await sendMail({
+        to: populated.complainant.email,
+        subject: "Update on your complaint",
+        text: lines.join("\n"),
+      });
+    }
 
     return res.status(200).json({ success: true, data: populated });
   } catch (error) {

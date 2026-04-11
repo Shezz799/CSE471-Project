@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getPosts } from "../api/posts";
 import {
@@ -8,19 +8,17 @@ import {
   getMyReviewsReceived,
   getReviewStats,
 } from "../api/reviews";
-import { lookupUserByEmail } from "../api/users";
 
 const RateMentor = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const receivedSectionRef = useRef(null);
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
 
   const [postId, setPostId] = useState("");
   const [mentorId, setMentorId] = useState("");
-  const [mentorEmail, setMentorEmail] = useState("");
-  const [mentorFromLookup, setMentorFromLookup] = useState(null);
-  const [lookupError, setLookupError] = useState("");
-  const [lookupLoading, setLookupLoading] = useState(false);
 
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -36,12 +34,38 @@ const RateMentor = () => {
     [posts, user?.id]
   );
 
+  /** Posts where at least one person who offered help has not been reviewed yet for that post */
+  const myPostsEligible = useMemo(() => {
+    return myPosts.filter((post) => {
+      const offers = post.offers || [];
+      if (offers.length === 0) return false;
+      const pid = String(post._id);
+      const reviewedMentorIds = new Set(
+        given
+          .filter((r) => String(r.post?._id || r.post) === pid)
+          .map((r) => String(r.reviewee?._id || r.reviewee))
+      );
+      return offers.some((o) => !reviewedMentorIds.has(String(o._id || o)));
+    });
+  }, [myPosts, given]);
+
   const selectedPost = useMemo(
-    () => myPosts.find((p) => p._id === postId) || null,
-    [myPosts, postId]
+    () => myPostsEligible.find((p) => p._id === postId) || null,
+    [myPostsEligible, postId]
   );
 
-  const offerMentors = selectedPost?.offers || [];
+  /** Mentors on the selected post you have not reviewed yet for that post */
+  const offerMentors = useMemo(() => {
+    const offers = selectedPost?.offers || [];
+    if (!selectedPost?._id || offers.length === 0) return [];
+    const pid = String(selectedPost._id);
+    const reviewedMentorIds = new Set(
+      given
+        .filter((r) => String(r.post?._id || r.post) === pid)
+        .map((r) => String(r.reviewee?._id || r.reviewee))
+    );
+    return offers.filter((o) => !reviewedMentorIds.has(String(o._id || o)));
+  }, [selectedPost, given]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,27 +106,40 @@ const RateMentor = () => {
   }, []);
 
   useEffect(() => {
-    if (postId) {
-      setMentorFromLookup(null);
-      setMentorEmail("");
-      setLookupError("");
-      setMentorId("");
-      setStatsPreview(null);
-    }
+    if (location.hash !== "#reviews-received") return;
+    const t = window.setTimeout(() => {
+      receivedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+    return () => window.clearTimeout(t);
+  }, [location.hash, location.pathname]);
+
+  useEffect(() => {
+    setMentorId("");
+    setStatsPreview(null);
   }, [postId]);
 
   useEffect(() => {
-    const id =
-      mentorId ||
-      (mentorFromLookup?.id && !postId ? mentorFromLookup.id : null);
-    if (!id) {
+    if (postId && !myPostsEligible.some((p) => p._id === postId)) {
+      setPostId("");
+    }
+  }, [postId, myPostsEligible]);
+
+  useEffect(() => {
+    if (!mentorId || offerMentors.length === 0) return;
+    if (!offerMentors.some((m) => String(m._id) === String(mentorId))) {
+      setMentorId("");
+    }
+  }, [mentorId, offerMentors]);
+
+  useEffect(() => {
+    if (!mentorId || !postId) {
       setStatsPreview(null);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await getReviewStats(id);
+        const { data } = await getReviewStats(mentorId);
         if (!cancelled) setStatsPreview(data.data);
       } catch {
         if (!cancelled) setStatsPreview(null);
@@ -111,44 +148,22 @@ const RateMentor = () => {
     return () => {
       cancelled = true;
     };
-  }, [mentorId, mentorFromLookup?.id, postId]);
-
-  const handleLookupEmail = async () => {
-    setLookupError("");
-    setMentorFromLookup(null);
-    const email = mentorEmail.trim().toLowerCase();
-    if (!email) {
-      setLookupError("Enter the mentor's university email.");
-      return;
-    }
-    setLookupLoading(true);
-    try {
-      const { data } = await lookupUserByEmail(email);
-      setMentorFromLookup(data.data);
-    } catch (err) {
-      setLookupError(err.response?.data?.message || "Lookup failed");
-    } finally {
-      setLookupLoading(false);
-    }
-  };
-
-  const resolveRevieweeId = () => {
-    if (postId) {
-      return mentorId || null;
-    }
-    return mentorFromLookup?.id || null;
-  };
+  }, [mentorId, postId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormMessage({ type: "", text: "" });
-    const revieweeId = resolveRevieweeId();
-    if (!revieweeId) {
+    if (!postId) {
       setFormMessage({
         type: "error",
-        text: postId
-          ? "Choose a mentor from the list (they must have offered help on that request)."
-          : "Look up the mentor by email first.",
+        text: "Choose the help request where they offered help.",
+      });
+      return;
+    }
+    if (!mentorId) {
+      setFormMessage({
+        type: "error",
+        text: "Choose the mentor from the list for that request.",
       });
       return;
     }
@@ -159,20 +174,15 @@ const RateMentor = () => {
     setSubmitting(true);
     try {
       await createReview({
-        revieweeId,
-        postId: postId || undefined,
+        revieweeId: mentorId,
+        postId,
         rating,
         comment: comment.trim(),
       });
       setFormMessage({ type: "ok", text: "Thank you — your review was saved." });
       setComment("");
       setRating(5);
-      if (!postId) {
-        setMentorFromLookup(null);
-        setMentorEmail("");
-      } else {
-        setMentorId("");
-      }
+      setMentorId("");
       const [g, r] = await Promise.all([getMyReviewsGiven(), getMyReviewsReceived()]);
       setGiven(g.data.data || []);
       setReceived(r.data.data || []);
@@ -192,8 +202,8 @@ const RateMentor = () => {
         <div>
           <h1 className="module2-page__title">Ratings &amp; reviews</h1>
           <p className="module2-page__subtitle">
-            Rate a mentor after they help you. If the help was for a posted request, link that request
-            — only mentors who offered help on it can be selected.
+            Rate a mentor only after they offered help on your posted request. Each help request allows one review
+            per mentor.
           </p>
         </div>
         <Link to="/dashboard" className="button module2-page__back">
@@ -205,86 +215,71 @@ const RateMentor = () => {
         <section className="card module2-card">
           <h2 className="module2-card__title">Submit a review</h2>
           {loadingPosts && <p className="module2-muted">Loading your help requests…</p>}
+          {!loadingPosts && myPosts.length === 0 && (
+            <p className="module2-muted">
+              You have no help requests yet. Create one from the dashboard, then after someone offers help you can
+              rate them here.
+            </p>
+          )}
+          {!loadingPosts && myPosts.length > 0 && myPostsEligible.length === 0 && (
+            <p className="module2-muted">
+              Every help request that had offers is already reviewed. When someone new offers help on a post, it will
+              show up here again.
+            </p>
+          )}
           <form className="module2-form" onSubmit={handleSubmit}>
             <div className="field">
               <label className="label" htmlFor="rev-post">
-                Related help request (optional)
+                Your help request
               </label>
               <select
                 id="rev-post"
                 className="input"
                 value={postId}
                 onChange={(e) => setPostId(e.target.value)}
+                required
+                disabled={myPostsEligible.length === 0}
               >
-                <option value="">— Not tied to a specific post —</option>
-                {myPosts.map((p) => (
+                <option value="">Select help request</option>
+                {myPostsEligible.map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.subject}: {p.topic}
                   </option>
                 ))}
               </select>
               <p className="module2-hint">
-                If you choose a post, you must pick a mentor who used &quot;Offer help&quot; on that post.
+                Only requests where you still owe a review to at least one mentor are listed. Each mentor can be
+                reviewed once per request.
               </p>
             </div>
 
-            {postId ? (
-              <div className="field">
-                <label className="label" htmlFor="rev-mentor">
-                  Mentor
-                </label>
-                {offerMentors.length === 0 ? (
-                  <p className="module2-muted">No one has offered help on this request yet.</p>
-                ) : (
-                  <select
-                    id="rev-mentor"
-                    className="input"
-                    value={mentorId}
-                    onChange={(e) => setMentorId(e.target.value)}
-                    required
-                  >
-                    <option value="">Select mentor</option>
-                    {offerMentors.map((m) => (
-                      <option key={m._id} value={m._id}>
-                        {m.name} ({m.email})
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            ) : (
-              <div className="field">
-                <label className="label" htmlFor="rev-email">
-                  Mentor email
-                </label>
-                <div className="module2-inline">
-                  <input
-                    id="rev-email"
-                    className="input"
-                    type="email"
-                    value={mentorEmail}
-                    onChange={(e) => setMentorEmail(e.target.value)}
-                    placeholder="name@g.bracu.ac.bd"
-                  />
-                  <button
-                    type="button"
-                    className="button"
-                    onClick={handleLookupEmail}
-                    disabled={lookupLoading}
-                  >
-                    {lookupLoading ? "…" : "Look up"}
-                  </button>
-                </div>
-                {lookupError && <p className="error module2-field-error">{lookupError}</p>}
-                {mentorFromLookup && (
-                  <p className="module2-lookup-ok">
-                    Mentor: <strong>{mentorFromLookup.name}</strong> ({mentorFromLookup.email})
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="field">
+              <label className="label" htmlFor="rev-mentor">
+                Mentor
+              </label>
+              {!postId ? (
+                <p className="module2-muted">Select a help request first.</p>
+              ) : offerMentors.length === 0 ? (
+                <p className="module2-muted">No mentors left to review for this request.</p>
+              ) : (
+                <select
+                  id="rev-mentor"
+                  className="input"
+                  value={mentorId}
+                  onChange={(e) => setMentorId(e.target.value)}
+                  required
+                >
+                  <option value="">Select mentor</option>
+                  {offerMentors.map((m) => (
+                    <option key={m._id} value={m._id}>
+                      {m.name} ({m.email})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
-            {statsPreview && (mentorId || mentorFromLookup) && (
+            {statsPreview && mentorId && postId && (
               <p className="module2-stats-preview">
                 Their public stats:{" "}
                 <strong>
@@ -292,7 +287,9 @@ const RateMentor = () => {
                     ? "No reviews yet"
                     : `${statsPreview.averageRating} ★ average (${statsPreview.reviewCount} review${
                         statsPreview.reviewCount === 1 ? "" : "s"
-                      })`}
+                      }) · offered help on ${statsPreview.helpsOfferedCount ?? 0} request${
+                        statsPreview.helpsOfferedCount === 1 ? "" : "s"
+                      }`}
                 </strong>
               </p>
             )}
@@ -331,12 +328,10 @@ const RateMentor = () => {
             </div>
 
             {formMessage.text && (
-              <p className={formMessage.type === "ok" ? "module2-success" : "error"}>
-                {formMessage.text}
-              </p>
+              <p className={formMessage.type === "ok" ? "module2-success" : "error"}>{formMessage.text}</p>
             )}
 
-            <button type="submit" className="button" disabled={submitting}>
+            <button type="submit" className="button" disabled={submitting || myPostsEligible.length === 0}>
               {submitting ? "Saving…" : "Submit review"}
             </button>
           </form>
@@ -347,35 +342,65 @@ const RateMentor = () => {
           {given.length === 0 ? (
             <p className="module2-muted">You have not submitted any reviews yet.</p>
           ) : (
-            <ul className="module2-list">
-              {given.map((r) => (
-                <li key={r._id} className="module2-list-item">
-                  <strong>{r.rating}★</strong> to {r.reviewee?.name || "Mentor"}
-                  {r.post && (
-                    <span className="module2-muted">
-                      {" "}
-                      · {r.post.subject} / {r.post.topic}
-                    </span>
-                  )}
-                  {r.comment ? <p className="module2-review-text">{r.comment}</p> : null}
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="module2-list">
+                {given.slice(0, 1).map((r) => (
+                  <li key={r._id} className="module2-list-item">
+                    <strong>{r.rating}★</strong> to {r.reviewee?.name || "Mentor"}
+                    {r.post && (
+                      <span className="module2-muted">
+                        {" "}
+                        · {r.post.subject} / {r.post.topic}
+                      </span>
+                    )}
+                    {r.comment ? <p className="module2-review-text">{r.comment}</p> : null}
+                  </li>
+                ))}
+              </ul>
+              {given.length > 1 && (
+                <button
+                  type="button"
+                  className="module2-see-more"
+                  onClick={() => navigate("/reviews/all-given")}
+                >
+                  See more ({given.length - 1} older)
+                </button>
+              )}
+            </>
           )}
 
-          <h2 className="module2-card__title module2-card__title--second">Reviews you received</h2>
-          {received.length === 0 ? (
-            <p className="module2-muted">No reviews yet.</p>
-          ) : (
-            <ul className="module2-list">
-              {received.map((r) => (
-                <li key={r._id} className="module2-list-item">
-                  <strong>{r.rating}★</strong> from {r.reviewer?.name || "Student"}
-                  {r.comment ? <p className="module2-review-text">{r.comment}</p> : null}
-                </li>
-              ))}
-            </ul>
-          )}
+          <div id="reviews-received-section" ref={receivedSectionRef} className="module2-reviews-received-anchor">
+            <h2 className="module2-card__title module2-card__title--second">Reviews you received</h2>
+            {received.length === 0 ? (
+              <p className="module2-muted">No reviews yet.</p>
+            ) : (
+              <>
+                <ul className="module2-list">
+                  {received.slice(0, 1).map((r) => (
+                    <li key={r._id} className="module2-list-item">
+                      <strong>{r.rating}★</strong> from {r.reviewer?.name || "Student"}
+                      {r.post && (
+                        <span className="module2-muted">
+                          {" "}
+                          · {r.post.subject} / {r.post.topic}
+                        </span>
+                      )}
+                      {r.comment ? <p className="module2-review-text">{r.comment}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+                {received.length > 1 && (
+                  <button
+                    type="button"
+                    className="module2-see-more"
+                    onClick={() => navigate("/reviews/all-received")}
+                  >
+                    See more ({received.length - 1} older)
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </section>
       </div>
     </div>

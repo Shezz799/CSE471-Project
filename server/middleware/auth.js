@@ -17,6 +17,22 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
+    const status = user.accountStatus || "active";
+    if (status === "suspended") {
+      return res.status(403).json({
+        success: false,
+        code: "ACCOUNT_SUSPENDED",
+        message: "Your account is suspended. Check your email for details or submit a review request via the link we sent.",
+      });
+    }
+    if (status === "banned") {
+      return res.status(403).json({
+        success: false,
+        code: "ACCOUNT_BANNED",
+        message: "Your account is banned. Check your email for details.",
+      });
+    }
+
     req.user = user;
     return next();
   } catch (error) {

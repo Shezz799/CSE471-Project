@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getPosts, createPost, deletePost, offerHelpToPost } from "../api/posts";
 import PostCard from "../components/PostCard";
+import { useReviewNotifications } from "../context/ReviewNotificationContext";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { unreadCount } = useReviewNotifications();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -78,68 +80,111 @@ const Dashboard = () => {
 
   const myPosts = posts.filter((p) => (p.author?._id || p.author) === user?.id);
   const displayPosts = feedTab === "mine" ? myPosts : posts;
+  const openOthersCount = posts.filter(
+    (p) =>
+      p.status === "open" &&
+      user?.id &&
+      (p.author?._id || p.author) !== user.id
+  ).length;
 
   return (
     <div className="skill-dashboard">
-      {/* LEFT SECTION — Feed / Wall (40–45%) */}
+      <div className="skill-dashboard__main">
+      {/* LEFT SECTION — Feed / Wall (readable column, not endless white) */}
       <section className="skill-dashboard__feed">
-        <div className="skill-dashboard__feed-header">
-          <h1 className="skill-dashboard__feed-title">Skill Sharing Feed</h1>
-          <button
-            type="button"
-            className="button skill-dashboard__create-btn"
-            onClick={() => setCreateModalOpen(true)}
-          >
-            Create help request
-          </button>
-        </div>
+        <div className="skill-dashboard__feed-inner">
+          <div className="skill-dashboard__feed-header">
+            <h1 className="skill-dashboard__feed-title">Skill Sharing Feed</h1>
+            <button
+              type="button"
+              className="button skill-dashboard__create-btn"
+              onClick={() => setCreateModalOpen(true)}
+            >
+              Create help request
+            </button>
+          </div>
 
-        {/* Toggle: All Posts / My Posts */}
-        <div className="skill-dashboard__tabs">
-          <button
-            type="button"
-            className={`skill-dashboard__tab ${feedTab === "all" ? "skill-dashboard__tab--active" : ""}`}
-            onClick={() => setFeedTab("all")}
-          >
-            All Posts
-          </button>
-          <button
-            type="button"
-            className={`skill-dashboard__tab ${feedTab === "mine" ? "skill-dashboard__tab--active" : ""}`}
-            onClick={() => setFeedTab("mine")}
-          >
-            My Posts
-          </button>
-        </div>
+          <div className="skill-dashboard__tabs">
+            <button
+              type="button"
+              className={`skill-dashboard__tab ${feedTab === "all" ? "skill-dashboard__tab--active" : ""}`}
+              onClick={() => setFeedTab("all")}
+            >
+              All Posts
+            </button>
+            <button
+              type="button"
+              className={`skill-dashboard__tab ${feedTab === "mine" ? "skill-dashboard__tab--active" : ""}`}
+              onClick={() => setFeedTab("mine")}
+            >
+              My Posts
+            </button>
+          </div>
 
-        {/* Scrollable feed */}
-        <div className="skill-dashboard__wall">
-          {loading && <p className="skill-dashboard__message">Loading feed...</p>}
-          {error && <p className="error">{error}</p>}
-          {!loading && !error && displayPosts.length === 0 && (
-            <p className="skill-dashboard__message">
-              {feedTab === "mine" ? "You haven't posted yet." : "No posts yet. Be the first to ask for help!"}
-            </p>
-          )}
-          {!loading && !error && displayPosts.length > 0 && (
-            <div className="skill-dashboard__list">
-              {displayPosts.map((post) => (
-                <PostCard
-                  key={post._id}
-                  post={post}
-                  currentUser={user}
-                  onDelete={handleDelete}
-                  onOfferHelp={handleOfferHelp}
-                />
-              ))}
-            </div>
-          )}
+          <div className="skill-dashboard__wall">
+            {loading && <p className="skill-dashboard__message">Loading feed…</p>}
+            {error && <p className="error skill-dashboard__error">{error}</p>}
+            {!loading && !error && displayPosts.length === 0 && (
+              <div className="skill-dashboard__empty">
+                <p className="skill-dashboard__empty-title">
+                  {feedTab === "mine" ? "You have not posted a help request yet" : "No help requests on the wall yet"}
+                </p>
+                <p className="skill-dashboard__empty-text">
+                  {feedTab === "mine"
+                    ? "Describe a topic you are stuck on. Mentors who offered help can appear in your post — rate them when you are done."
+                    : "When someone posts, you will see it here. You can offer help on open posts that are not yours."}
+                </p>
+                {feedTab === "mine" && (
+                  <button
+                    type="button"
+                    className="button skill-dashboard__empty-cta"
+                    onClick={() => setCreateModalOpen(true)}
+                  >
+                    Create your first help request
+                  </button>
+                )}
+              </div>
+            )}
+            {!loading && !error && displayPosts.length > 0 && (
+              <div className="skill-dashboard__list">
+                {displayPosts.map((post) => (
+                  <PostCard
+                    key={post._id}
+                    post={post}
+                    currentUser={user}
+                    onDelete={handleDelete}
+                    onOfferHelp={handleOfferHelp}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
       {/* RIGHT SECTION — 70% — User dashboard area */}
       <aside className="skill-dashboard__panel">
-        {/* User profile */}
+        <div className="skill-dashboard__summary card">
+          <h3 className="skill-dashboard__summary-title">Wall snapshot</h3>
+          <ul className="skill-dashboard__summary-list">
+            <li>
+              <span className="skill-dashboard__summary-value">{posts.length}</span>
+              <span className="skill-dashboard__summary-label">help requests total</span>
+            </li>
+            <li>
+              <span className="skill-dashboard__summary-value">{myPosts.length}</span>
+              <span className="skill-dashboard__summary-label">posted by you</span>
+            </li>
+            <li>
+              <span className="skill-dashboard__summary-value">{openOthersCount}</span>
+              <span className="skill-dashboard__summary-label">open posts you can help with</span>
+            </li>
+          </ul>
+          <p className="skill-dashboard__summary-tip">
+            After someone helps you, use <strong>Ratings &amp; reviews</strong> to leave feedback.
+          </p>
+        </div>
+
         <div className="skill-dashboard__profile card">
           <div className="skill-dashboard__avatar" aria-hidden>
             {user?.name?.charAt(0)?.toUpperCase() || "?"}
@@ -151,6 +196,19 @@ const Dashboard = () => {
           </p>
         </div>
 
+        {user?.isDashboardAdmin ? (
+          <div className="skill-dashboard__action card">
+            <button
+              type="button"
+              className="skill-dashboard__action-btn skill-dashboard__action-btn--admin"
+              onClick={() => navigate("/admin")}
+            >
+              <span className="skill-dashboard__action-icon" aria-hidden>⎔</span>
+              Log in as admin
+            </button>
+          </div>
+        ) : null}
+
         {/* Messaging — placeholder */}
         <div className="skill-dashboard__action card">
           <button
@@ -160,6 +218,22 @@ const Dashboard = () => {
           >
             <span className="skill-dashboard__action-icon" aria-hidden>✉</span>
             Messages
+          </button>
+        </div>
+
+        <div className="skill-dashboard__action card">
+          <button
+            type="button"
+            className="skill-dashboard__action-btn skill-dashboard__action-btn--with-badge"
+            onClick={() => navigate("/notifications")}
+          >
+            <span className="skill-dashboard__action-icon" aria-hidden>🔔</span>
+            Notifications
+            {unreadCount > 0 ? (
+              <span className="skill-dashboard__notif-badge" aria-label={`${unreadCount} unread`}>
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            ) : null}
           </button>
         </div>
 
@@ -194,15 +268,6 @@ const Dashboard = () => {
           </button>
         </div>
 
-        {/* Notifications — placeholder */}
-        <div className="skill-dashboard__action card">
-          <button type="button" className="skill-dashboard__action-btn" disabled>
-            <span className="skill-dashboard__action-icon skill-dashboard__action-icon--bell" aria-hidden>🔔</span>
-            Notifications
-            <span className="skill-dashboard__badge">0</span>
-          </button>
-        </div>
-
         {/* Buy Credits — placeholder */}
         <div className="skill-dashboard__action card">
           <button type="button" className="button skill-dashboard__buy-btn" disabled>
@@ -215,6 +280,7 @@ const Dashboard = () => {
           Log out
         </button>
       </aside>
+      </div>
 
       {/* Messages drawer placeholder */}
       {/* Create Post modal */}
