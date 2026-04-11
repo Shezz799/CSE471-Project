@@ -29,6 +29,7 @@ app.use("/api/invite", require("./routes/inviteRoutes"));
 app.use("/api/chats", require("./routes/chatRoutes"));
 app.use("/api/messages", require("./routes/messageRoutes"));
 app.use("/api/reviews", require("./routes/reviewRoutes"));
+app.use("/api/complaints", require("./routes/complaintRoutes"));
 
 const PORT = process.env.PORT || 5000;
 

@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import CreateAccount from "./pages/CreateAccount";
 import Messages from "./pages/Messages";
 import RateMentor from "./pages/RateMentor";
+import Complaints from "./pages/Complaints";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const App = () => {
@@ -42,6 +43,14 @@ const App = () => {
         element={
           <ProtectedRoute>
             <RateMentor />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/complaints"
+        element={
+          <ProtectedRoute>
+            <Complaints />
           </ProtectedRoute>
         }
       />
