@@ -255,3 +255,31 @@ exports.updateProfile = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+exports.getUserAnalytics = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Fetch real review stats that Muktadir already built
+    const reviewStats = await getFullReviewStatsForUser(userId);
+
+    // Fetch Complaints count
+    const Complaint = require("../models/Complaint");
+    const complaintsAgainstYou = await Complaint.countDocuments({ subjectUser: userId });
+    const complaintsFiledByYou = await Complaint.countDocuments({ complainant: userId });
+
+    // Combine current user credits with review stats and complaints
+    return res.status(200).json({
+      success: true,
+      data: {
+        currentCredits: req.user.credits || 0,
+        reviewStats,
+        complaintsAgainstYou,
+        complaintsFiledByYou
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+

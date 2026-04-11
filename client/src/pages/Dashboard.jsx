@@ -241,6 +241,17 @@ const Dashboard = () => {
           <button
             type="button"
             className="skill-dashboard__action-btn"
+            onClick={() => navigate("/analytics")}
+          >
+            <span className="skill-dashboard__action-icon" aria-hidden>📊</span>
+            Analytics Dashboard
+          </button>
+        </div>
+
+        <div className="skill-dashboard__action card">
+          <button
+            type="button"
+            className="skill-dashboard__action-btn"
             onClick={() => navigate("/reviews")}
           >
             <span className="skill-dashboard__action-icon" aria-hidden>⭐</span>

@@ -10,6 +10,7 @@ import UserProfile from "./pages/UserProfile";
 import Notifications from "./pages/Notifications";
 import ReviewsAll from "./pages/ReviewsAll";
 import Appeal from "./pages/Appeal";
+import Analytics from "./pages/Analytics";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminComplaints from "./pages/admin/AdminComplaints";
 import AdminComplaintDetail from "./pages/admin/AdminComplaintDetail";
@@ -120,6 +121,14 @@ const App = () => {
         element={
           <ProtectedRoute>
             <ReviewsAll mode="given" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/analytics"
+        element={
+          <ProtectedRoute>
+            <Analytics />
           </ProtectedRoute>
         }
       />
