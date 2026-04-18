@@ -17,6 +17,9 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [feedTab, setFeedTab] = useState("all"); // "all" | "mine"
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedSubtag, setSelectedSubtag] = useState("All");
   const [form, setForm] = useState({ subject: "", topic: "", description: "", creditsOffered: "" });
   const [submitting, setSubmitting] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -85,15 +88,47 @@ const Dashboard = () => {
     }
   };
 
-  const myPosts = posts.filter((p) => (p.author?._id || p.author) === user?.id);
-  const displayPosts = feedTab === "mine" ? myPosts : posts;
+  const categories = ["All", ...new Set(posts.map((p) => p.subject).filter(Boolean))];
+  const subTags = [
+    "All",
+    ...new Set(
+      posts
+        .filter((p) => selectedCategory === "All" || p.subject === selectedCategory)
+        .map((p) => p.topic)
+        .filter(Boolean)
+    ),
+  ];
+
+  const filteredPosts = posts.filter((p) => {
+    // 1. Tab filter
+    if (feedTab === "mine" && (p.author?._id || p.author) !== user?.id) return false;
+    
+    // 2. Category / Subject
+    if (selectedCategory !== "All" && p.subject !== selectedCategory) return false;
+
+    // 3. Sub-tag / Topic
+    if (selectedSubtag !== "All" && p.topic !== selectedSubtag) return false;
+
+    // 4. Keyword Search (case-insensitive)
+    if (searchQuery.trim() !== "") {
+      const q = searchQuery.toLowerCase();
+      const matchSubject = p.subject?.toLowerCase().includes(q);
+      const matchTopic = p.topic?.toLowerCase().includes(q);
+      const matchDesc = p.description?.toLowerCase().includes(q);
+      if (!matchSubject && !matchTopic && !matchDesc) return false;
+    }
+
+    return true;
+  });
+
+  const displayPosts = filteredPosts;
 
   const visiblePosts = displayPosts.slice(0, visibleCount);
   const hasMorePosts = visibleCount < displayPosts.length;
 
   useEffect(() => {
     setVisibleCount(FEED_BATCH_SIZE);
-  }, [feedTab]);
+  }, [feedTab, searchQuery, selectedCategory, selectedSubtag]);
 
   useEffect(() => {
     if (!hasMorePosts || !infiniteSentinelRef.current) return;
@@ -127,8 +162,9 @@ const Dashboard = () => {
             id="dashboard-search"
             className="skill-dashboard__search"
             type="search"
-            placeholder="Search"
-            readOnly
+            placeholder="Search keywords..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
           <span className="skill-dashboard__search-icon" aria-hidden>
             ⌕
@@ -263,6 +299,49 @@ const Dashboard = () => {
             >
               Create help request
             </button>
+          </div>
+
+          <div className="skill-dashboard__filter-bar" style={{ display: 'flex', gap: '1rem', padding: '1rem 2rem', borderBottom: '1px solid var(--c-border)', backgroundColor: 'var(--c-surface)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label className="label" style={{ marginBottom: 0, whiteSpace: 'nowrap', color: '#ffffff', fontWeight: '600', fontSize: '1rem' }} htmlFor="filter-cat">Category:</label>
+              <select 
+                id="filter-cat"
+                className="input" 
+                style={{ padding: '0.4rem', height: 'auto', minWidth: '150px' }}
+                value={selectedCategory} 
+                onChange={(e) => { setSelectedCategory(e.target.value); setSelectedSubtag("All"); }}
+              >
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label className="label" style={{ marginBottom: 0, whiteSpace: 'nowrap', color: '#ffffff', fontWeight: '600', fontSize: '1rem' }} htmlFor="filter-sub">Sub-tag:</label>
+              <select 
+                id="filter-sub"
+                className="input" 
+                style={{ padding: '0.4rem', height: 'auto', minWidth: '150px' }}
+                value={selectedSubtag} 
+                onChange={(e) => setSelectedSubtag(e.target.value)}
+              >
+                {subTags.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+
+            {(selectedCategory !== "All" || selectedSubtag !== "All" || searchQuery) && (
+              <button 
+                type="button" 
+                className="button button--danger" 
+                style={{ height: 'auto', padding: '0.4rem 1rem', marginLeft: 'auto' }}
+                onClick={() => { setSelectedCategory("All"); setSelectedSubtag("All"); setSearchQuery(""); }}
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
 
           <div className="skill-dashboard__feed-body">
