@@ -59,7 +59,7 @@ const Register = () => {
       <section className="auth-panel-wrap">
         <div className="auth-panel">
           <h1 className="auth-panel__title">Create account</h1>
-          <p className="auth-panel__subtitle">Sign up with your institution&apos;s G-Suite account</p>
+          <p className="auth-panel__subtitle">Sign up with your Google account</p>
           {error && <div className="error">{error}</div>}
           {success && <div className="success">{success}</div>}
           <div className="auth-google" id="google-register"></div>

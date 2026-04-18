@@ -33,5 +33,5 @@ npm run dev
 
 
 ## Notes
-- Use a BRACU email for Google OAuth to work.
+- Use a Google account for OAuth sign-in.
 - If you change ports, you need to update CLIENT_URL and VITE_API_URL in the env accordingly.

@@ -16,7 +16,7 @@ const signToken = (userId) => {
 };
 
 const isAllowedDomain = (email) => {
-  return typeof email === "string" && email.endsWith("@g.bracu.ac.bd");
+  return typeof email === "string" && email.trim().toLowerCase().endsWith("@gmail.com");
 };
 
 const verifyGoogleToken = async (idToken) => {
@@ -58,11 +58,11 @@ exports.register = async (req, res) => {
     }
 
     const payload = await verifyGoogleToken(idToken);
-    const email = payload.email;
+    const email = String(payload.email || "").trim().toLowerCase();
     const name = payload.name || payload.given_name || "User";
 
     if (!payload.email_verified || !isAllowedDomain(email)) {
-      return res.status(403).json({ success: false, message: "Unauthorized domain" });
+      return res.status(403).json({ success: false, message: "Only verified Gmail accounts are allowed" });
     }
 
     const existingUser = await User.findOne({ email }).select("-password");
@@ -104,10 +104,10 @@ exports.login = async (req, res) => {
     }
 
     const payload = await verifyGoogleToken(idToken);
-    const email = payload.email;
+    const email = String(payload.email || "").trim().toLowerCase();
 
     if (!payload.email_verified || !isAllowedDomain(email)) {
-      return res.status(403).json({ success: false, message: "Unauthorized domain" });
+      return res.status(403).json({ success: false, message: "Only verified Gmail accounts are allowed" });
     }
 
     const user = await User.findOne({ email });

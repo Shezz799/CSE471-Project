@@ -68,7 +68,7 @@ const Login = () => {
       <section className="auth-panel-wrap">
         <div className="auth-panel auth-panel--center">
           <h1 className="auth-panel__title">Welcome back</h1>
-          <p className="auth-panel__subtitle">Sign in with your institution&apos;s G-Suite account</p>
+          <p className="auth-panel__subtitle">Sign in with your Google account</p>
           {error && <div className="error">{error}</div>}
           <div className="auth-google" id="google-login"></div>
           <div className="auth-panel__link-row">

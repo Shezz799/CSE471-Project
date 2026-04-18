@@ -21,6 +21,8 @@ const ConversationPanel = ({
   typingUser,
   onToggleProfile,
   isProfileOpen,
+  onStartVoiceCall,
+  canStartVoiceCall,
 }) => {
   const composerInputRef = useRef(null);
 
@@ -64,7 +66,15 @@ const ConversationPanel = ({
           </div>
         </div>
         <div className="chat-header-actions">
-          <button type="button" className="chat-call-btn" aria-label="Call placeholder">Call</button>
+          <button
+            type="button"
+            className="chat-call-btn"
+            aria-label="Start voice call"
+            onClick={onStartVoiceCall}
+            disabled={!canStartVoiceCall}
+          >
+            Start Voice Call
+          </button>
           <button
             type="button"
             className="chat-profile-toggle-btn"

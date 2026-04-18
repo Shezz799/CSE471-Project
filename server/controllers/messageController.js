@@ -69,7 +69,7 @@ const createMessage = async (req, res) => {
 
     const io = getIO();
     io.to(chatId).emit("message:new", populatedMessage);
-
+    
     return res.status(201).json({ success: true, data: populatedMessage });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

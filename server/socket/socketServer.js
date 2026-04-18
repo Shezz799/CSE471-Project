@@ -6,6 +6,52 @@ const User = require("../models/User");
 
 let io;
 const onlineUsers = new Map();
+const activeCallSessions = new Map();
+
+const getCallSession = (userId) => activeCallSessions.get(String(userId)) || null;
+
+const setCallSessionPair = (userAId, userBId, chatId, state) => {
+  const normalizedChatId = String(chatId);
+  const normalizedState = state || "ringing";
+
+  activeCallSessions.set(String(userAId), {
+    peerUserId: String(userBId),
+    chatId: normalizedChatId,
+    state: normalizedState,
+  });
+
+  activeCallSessions.set(String(userBId), {
+    peerUserId: String(userAId),
+    chatId: normalizedChatId,
+    state: normalizedState,
+  });
+};
+
+const clearCallSessionForUser = (userId) => {
+  const normalizedUserId = String(userId);
+  const session = activeCallSessions.get(normalizedUserId);
+  if (!session) return null;
+
+  activeCallSessions.delete(normalizedUserId);
+
+  const peerUserId = String(session.peerUserId);
+  const peerSession = activeCallSessions.get(peerUserId);
+  if (peerSession && String(peerSession.peerUserId) === normalizedUserId) {
+    activeCallSessions.delete(peerUserId);
+  }
+
+  return session;
+};
+
+const isUserBusyWithAnotherCall = (userId, otherUserId, chatId) => {
+  const session = getCallSession(userId);
+  if (!session) return false;
+
+  const samePeer = String(session.peerUserId) === String(otherUserId);
+  const sameChat = String(session.chatId) === String(chatId);
+
+  return !(samePeer && sameChat);
+};
 
 const addUserSocket = (userId, socketId) => {
   const currentSockets = onlineUsers.get(userId) || new Set();
@@ -24,6 +70,14 @@ const removeUserSocket = (userId, socketId) => {
 
 const emitToUser = (userId, eventName, payload) => {
   if (!io) return;
+  const socketIds = onlineUsers.get(String(userId));
+  if (socketIds && socketIds.size > 0) {
+    socketIds.forEach((socketId) => {
+      io.to(socketId).emit(eventName, payload);
+    });
+    return;
+  }
+
   io.to(`user:${String(userId)}`).emit(eventName, payload);
 };
 
@@ -54,6 +108,33 @@ const isParticipantInChat = async (chatId, userId) => {
   }
   const allowed = chat.participants.some((participantId) => String(participantId) === String(userId));
   return { allowed, message: allowed ? "" : "Not authorized for this chat" };
+};
+
+const validateCallRouting = async ({ chatId, senderUserId, targetUserId }) => {
+  if (!chatId || !targetUserId) {
+    return { allowed: false, message: "chatId and targetUserId are required" };
+  }
+
+  if (String(senderUserId) === String(targetUserId)) {
+    return { allowed: false, message: "You cannot call yourself" };
+  }
+
+  const chat = await Chat.findById(chatId).select("participants");
+  if (!chat) {
+    return { allowed: false, message: "Chat not found" };
+  }
+
+  const senderAllowed = chat.participants.some((participantId) => String(participantId) === String(senderUserId));
+  if (!senderAllowed) {
+    return { allowed: false, message: "Not authorized for this chat" };
+  }
+
+  const targetAllowed = chat.participants.some((participantId) => String(participantId) === String(targetUserId));
+  if (!targetAllowed) {
+    return { allowed: false, message: "Target user is not in this chat" };
+  }
+
+  return { allowed: true };
 };
 
 const setupSocketHandlers = (socket) => {
@@ -113,6 +194,200 @@ const setupSocketHandlers = (socket) => {
       isTyping: Boolean(isTyping),
     });
   });
+
+  socket.on("call_user", async (payload) => {
+    try {
+      const { targetUserId, chatId } = payload || {};
+
+      const { allowed, message } = await validateCallRouting({
+        chatId,
+        senderUserId: userId,
+        targetUserId,
+      });
+
+      if (!allowed) {
+        socket.emit("socket:error", { message });
+        return;
+      }
+
+      if (isUserBusyWithAnotherCall(userId, targetUserId, chatId)) {
+        socket.emit("call_busy", {
+          chatId,
+          targetUserId,
+          reason: "You are already on another call",
+        });
+        return;
+      }
+
+      if (isUserBusyWithAnotherCall(targetUserId, userId, chatId)) {
+        socket.emit("call_busy", {
+          chatId,
+          targetUserId,
+          reason: "Target user is currently on another call",
+        });
+        return;
+      }
+
+      if (!onlineUsers.has(String(targetUserId))) {
+        socket.emit("call_unavailable", {
+          chatId,
+          targetUserId,
+          reason: "Target user is offline",
+        });
+        return;
+      }
+
+      setCallSessionPair(userId, targetUserId, chatId, "ringing");
+
+      emitToUser(targetUserId, "call_user", {
+        chatId,
+        fromUserId: userId,
+        fromUserName: socket.user.name,
+      });
+    } catch (error) {
+      socket.emit("socket:error", { message: error.message });
+    }
+  });
+
+  socket.on("call_offer", async (payload) => {
+    try {
+      const { targetUserId, chatId, offer } = payload || {};
+      if (!offer) {
+        socket.emit("socket:error", { message: "offer is required" });
+        return;
+      }
+
+      const { allowed, message } = await validateCallRouting({
+        chatId,
+        senderUserId: userId,
+        targetUserId,
+      });
+
+      if (!allowed) {
+        socket.emit("socket:error", { message });
+        return;
+      }
+
+      if (isUserBusyWithAnotherCall(userId, targetUserId, chatId) || isUserBusyWithAnotherCall(targetUserId, userId, chatId)) {
+        socket.emit("call_busy", {
+          chatId,
+          targetUserId,
+          reason: "Call target is no longer available",
+        });
+        return;
+      }
+
+      setCallSessionPair(userId, targetUserId, chatId, "ringing");
+
+      emitToUser(targetUserId, "call_offer", {
+        chatId,
+        fromUserId: userId,
+        fromUserName: socket.user.name,
+        offer,
+      });
+    } catch (error) {
+      socket.emit("socket:error", { message: error.message });
+    }
+  });
+
+  socket.on("call_answer", async (payload) => {
+    try {
+      const { targetUserId, chatId, answer } = payload || {};
+      if (!answer) {
+        socket.emit("socket:error", { message: "answer is required" });
+        return;
+      }
+
+      const { allowed, message } = await validateCallRouting({
+        chatId,
+        senderUserId: userId,
+        targetUserId,
+      });
+
+      if (!allowed) {
+        socket.emit("socket:error", { message });
+        return;
+      }
+
+      if (isUserBusyWithAnotherCall(userId, targetUserId, chatId) || isUserBusyWithAnotherCall(targetUserId, userId, chatId)) {
+        socket.emit("call_unavailable", {
+          chatId,
+          targetUserId,
+          reason: "Call session is no longer active",
+        });
+        return;
+      }
+
+      setCallSessionPair(userId, targetUserId, chatId, "connected");
+
+      emitToUser(targetUserId, "call_answer", {
+        chatId,
+        fromUserId: userId,
+        fromUserName: socket.user.name,
+        answer,
+      });
+    } catch (error) {
+      socket.emit("socket:error", { message: error.message });
+    }
+  });
+
+  socket.on("call_ice_candidate", async (payload) => {
+    try {
+      const { targetUserId, chatId, candidate } = payload || {};
+      if (!candidate) {
+        socket.emit("socket:error", { message: "candidate is required" });
+        return;
+      }
+
+      const { allowed, message } = await validateCallRouting({
+        chatId,
+        senderUserId: userId,
+        targetUserId,
+      });
+
+      if (!allowed) {
+        socket.emit("socket:error", { message });
+        return;
+      }
+
+      emitToUser(targetUserId, "call_ice_candidate", {
+        chatId,
+        fromUserId: userId,
+        fromUserName: socket.user.name,
+        candidate,
+      });
+    } catch (error) {
+      socket.emit("socket:error", { message: error.message });
+    }
+  });
+
+  socket.on("call_end", async (payload) => {
+    try {
+      const { targetUserId, chatId, reason = "Call ended" } = payload || {};
+
+      const { allowed, message } = await validateCallRouting({
+        chatId,
+        senderUserId: userId,
+        targetUserId,
+      });
+
+      if (!allowed) {
+        socket.emit("socket:error", { message });
+        return;
+      }
+
+      clearCallSessionForUser(userId);
+
+      emitToUser(targetUserId, "call_end", {
+        chatId,
+        fromUserId: userId,
+        fromUserName: socket.user.name,
+        reason,
+      });
+    } catch (error) {
+      socket.emit("socket:error", { message: error.message });
+    }
+  });
 };
 
 const initSocketServer = (httpServer) => {
@@ -155,6 +430,16 @@ const initSocketServer = (httpServer) => {
     socket.on("disconnect", () => {
       removeUserSocket(userId, socket.id);
       if (!onlineUsers.has(userId)) {
+        const endedCallSession = clearCallSessionForUser(userId);
+        if (endedCallSession?.peerUserId) {
+          emitToUser(endedCallSession.peerUserId, "call_end", {
+            chatId: endedCallSession.chatId,
+            fromUserId: userId,
+            fromUserName: socket.user.name,
+            reason: "The other user disconnected",
+          });
+        }
+
         io.emit("presence:update", { userId, online: false });
       }
     });

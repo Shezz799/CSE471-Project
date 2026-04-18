@@ -12,8 +12,12 @@ import {
 } from "../api/chat";
 import { connectChatSocket, getChatSocket } from "../socket/chatSocket";
 import ConversationPanel from "../components/chat/ConversationPanel";
+import VoiceCallPanel from "../components/chat/VoiceCallPanel";
 import StarAverage from "../components/ratings/StarAverage";
 import { getReviewStats, getReviewsForUser } from "../api/reviews";
+import useVoiceCallState, { VOICE_CALL_STATES } from "../hooks/useVoiceCallState";
+
+const OUTGOING_CALL_TIMEOUT_MS = 30000;
 
 const Messages = () => {
   const navigate = useNavigate();
@@ -38,9 +42,46 @@ const Messages = () => {
   const [profileRatingsLoading, setProfileRatingsLoading] = useState(false);
   const [listsReady, setListsReady] = useState(false);
 
+  const {
+    callState,
+    callContext,
+    incomingCaller,
+    callEndReason,
+    localAudioStreamRef,
+    localAudioStream,
+    remoteAudioStream,
+    isMicrophoneMuted,
+    microphoneError,
+    isRequestingMicrophone,
+    registerRemoteAudioElement,
+    registerOnIceCandidate,
+    addRemoteIceCandidate,
+    ensurePeerConnection,
+    requestMicrophoneAccess,
+    createOffer,
+    createAnswer,
+    setRemoteDescription,
+    isPanelOpen,
+    statusLabel,
+    startCall,
+    acceptIncomingCall,
+    rejectIncomingCall,
+    toggleMicrophoneMute,
+    receiveIncomingCall,
+    markCallConnected,
+    endCall,
+    handleRemoteUserDisconnected,
+    resetCall,
+  } = useVoiceCallState();
+
   const activeChatIdRef = useRef("");
   const chatsRef = useRef([]);
   const lastHandledWithParam = useRef("");
+  const callStateRef = useRef(callState);
+  const currentCallPeerIdRef = useRef("");
+  const callContextRef = useRef(callContext);
+  const outgoingCallTimeoutRef = useRef(null);
+  const pendingIncomingOfferRef = useRef(null);
 
   const activeChat = useMemo(
     () => chats.find((chat) => chat._id === activeChatId) || null,
@@ -170,6 +211,20 @@ const Messages = () => {
   }, [chats]);
 
   useEffect(() => {
+    callContextRef.current = callContext;
+  }, [callContext]);
+
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
+
+  const clearOutgoingCallTimeout = () => {
+    if (!outgoingCallTimeoutRef.current) return;
+    clearTimeout(outgoingCallTimeoutRef.current);
+    outgoingCallTimeoutRef.current = null;
+  };
+
+  useEffect(() => {
     if (!token) return;
 
     const socket = connectChatSocket(token);
@@ -210,6 +265,17 @@ const Messages = () => {
         next.set(userId, online);
         return next;
       });
+
+      if (
+        !online &&
+        currentCallPeerIdRef.current &&
+        String(currentCallPeerIdRef.current) === String(userId) &&
+        callStateRef.current !== VOICE_CALL_STATES.idle
+      ) {
+        clearOutgoingCallTimeout();
+        currentCallPeerIdRef.current = "";
+        handleRemoteUserDisconnected("The other user disconnected");
+      }
     };
 
     const onChatTyping = ({ chatId, userId, isTyping }) => {
@@ -223,22 +289,196 @@ const Messages = () => {
       setTypingUser(participant?.name || "Someone");
     };
 
+    const onCallUser = ({ chatId, fromUserId, fromUserName }) => {
+      const fromId = fromUserId ? String(fromUserId) : "";
+      const busyWithAnotherCall =
+        callStateRef.current !== VOICE_CALL_STATES.idle &&
+        currentCallPeerIdRef.current &&
+        currentCallPeerIdRef.current !== fromId;
+
+      if (busyWithAnotherCall) {
+        socket.emit("call_end", {
+          chatId: chatId ? String(chatId) : "",
+          targetUserId: fromId,
+          reason: "User is busy on another call",
+        });
+        return;
+      }
+
+      currentCallPeerIdRef.current = fromUserId ? String(fromUserId) : "";
+
+      receiveIncomingCall({
+        chatId,
+        participantName: fromUserName || "",
+        participantUserId: fromUserId || "",
+        callerName: fromUserName || "",
+      });
+
+      if (chatId) {
+        setActiveChatId(String(chatId));
+      }
+    };
+
+    const onCallOffer = async ({ chatId, fromUserId, fromUserName, offer }) => {
+      if (!offer || !fromUserId) return;
+
+      const fromId = String(fromUserId);
+      const busyWithAnotherCall =
+        callStateRef.current !== VOICE_CALL_STATES.idle &&
+        currentCallPeerIdRef.current &&
+        currentCallPeerIdRef.current !== fromId;
+
+      if (busyWithAnotherCall) {
+        socket.emit("call_end", {
+          chatId: chatId ? String(chatId) : "",
+          targetUserId: fromId,
+          reason: "User is busy on another call",
+        });
+        return;
+      }
+
+      currentCallPeerIdRef.current = fromId;
+      pendingIncomingOfferRef.current = {
+        chatId: chatId ? String(chatId) : "",
+        fromUserId: fromId,
+        fromUserName: fromUserName || "",
+        offer,
+      };
+
+      receiveIncomingCall({
+        chatId,
+        participantName: fromUserName || "",
+        participantUserId: fromUserId,
+        callerName: fromUserName || "",
+      });
+
+      if (chatId) {
+        setActiveChatId(String(chatId));
+      }
+    };
+
+    const onCallAnswer = async ({ answer }) => {
+      if (!answer) return;
+      const stream = localAudioStreamRef.current;
+      const remoteDescription = await setRemoteDescription(answer, stream);
+      if (remoteDescription) {
+        clearOutgoingCallTimeout();
+        markCallConnected();
+      }
+    };
+
+    const onCallIceCandidate = async ({ candidate }) => {
+      if (!candidate) return;
+      const stream = localAudioStreamRef.current;
+      await addRemoteIceCandidate(candidate, stream);
+    };
+
+    const onCallEnd = ({ fromUserId, reason }) => {
+      if (
+        currentCallPeerIdRef.current &&
+        fromUserId &&
+        String(currentCallPeerIdRef.current) !== String(fromUserId)
+      ) {
+        return;
+      }
+
+      clearOutgoingCallTimeout();
+      currentCallPeerIdRef.current = "";
+      pendingIncomingOfferRef.current = null;
+      handleRemoteUserDisconnected(reason || "The other user ended the call");
+    };
+
+    const onCallBusy = ({ reason }) => {
+      if (callStateRef.current === VOICE_CALL_STATES.idle) return;
+      clearOutgoingCallTimeout();
+      currentCallPeerIdRef.current = "";
+      pendingIncomingOfferRef.current = null;
+      endCall(reason || "Target user is currently busy");
+    };
+
+    const onCallUnavailable = ({ reason }) => {
+      if (callStateRef.current === VOICE_CALL_STATES.idle) return;
+      clearOutgoingCallTimeout();
+      currentCallPeerIdRef.current = "";
+      pendingIncomingOfferRef.current = null;
+      endCall(reason || "Target user is unavailable");
+    };
+
+    const unregisterIceCandidateHandler = registerOnIceCandidate((candidate) => {
+      const targetUserId = currentCallPeerIdRef.current;
+      const activeCallChatId = callContextRef.current?.chatId || activeChatIdRef.current;
+      if (!targetUserId || !activeCallChatId || !candidate) return;
+
+      socket.emit("call_ice_candidate", {
+        chatId: String(activeCallChatId),
+        targetUserId,
+        candidate: typeof candidate.toJSON === "function" ? candidate.toJSON() : candidate,
+      });
+    });
+
     socket.on("invite:received", onInviteReceived);
     socket.on("invite:updated", onInviteUpdated);
     socket.on("chat:created", onChatCreated);
     socket.on("message:new", onMessageNew);
     socket.on("presence:update", onPresenceUpdate);
     socket.on("chat:typing", onChatTyping);
+    socket.on("call_user", onCallUser);
+    socket.on("call_offer", onCallOffer);
+    socket.on("call_answer", onCallAnswer);
+    socket.on("call_ice_candidate", onCallIceCandidate);
+    socket.on("call_end", onCallEnd);
+    socket.on("call_busy", onCallBusy);
+    socket.on("call_unavailable", onCallUnavailable);
 
     return () => {
+      unregisterIceCandidateHandler?.();
+      clearOutgoingCallTimeout();
       socket.off("invite:received", onInviteReceived);
       socket.off("invite:updated", onInviteUpdated);
       socket.off("chat:created", onChatCreated);
       socket.off("message:new", onMessageNew);
       socket.off("presence:update", onPresenceUpdate);
       socket.off("chat:typing", onChatTyping);
+      socket.off("call_user", onCallUser);
+      socket.off("call_offer", onCallOffer);
+      socket.off("call_answer", onCallAnswer);
+      socket.off("call_ice_candidate", onCallIceCandidate);
+      socket.off("call_end", onCallEnd);
+      socket.off("call_busy", onCallBusy);
+      socket.off("call_unavailable", onCallUnavailable);
     };
   }, [token]);
+
+  useEffect(() => {
+    if (callState !== VOICE_CALL_STATES.calling) {
+      clearOutgoingCallTimeout();
+      return;
+    }
+
+    clearOutgoingCallTimeout();
+    outgoingCallTimeoutRef.current = setTimeout(() => {
+      if (callStateRef.current !== VOICE_CALL_STATES.calling) return;
+
+      const targetUserId = currentCallPeerIdRef.current;
+      const activeCallChatId = callContextRef.current?.chatId || activeChatIdRef.current;
+      const socket = getChatSocket();
+
+      if (socket && targetUserId && activeCallChatId) {
+        socket.emit("call_end", {
+          chatId: String(activeCallChatId),
+          targetUserId: String(targetUserId),
+          reason: "No answer",
+        });
+      }
+
+      currentCallPeerIdRef.current = "";
+      endCall("No answer");
+    }, OUTGOING_CALL_TIMEOUT_MS);
+
+    return () => {
+      clearOutgoingCallTimeout();
+    };
+  }, [callState]);
 
   useEffect(() => {
     if (!activeChatId) return;
@@ -337,6 +577,144 @@ const Messages = () => {
     const socket = getChatSocket();
     if (!socket || !activeChatId) return;
     socket.emit("chat:typing", { chatId: activeChatId, isTyping });
+  };
+
+  const canStartVoiceCall =
+    (callState === VOICE_CALL_STATES.idle || callState === VOICE_CALL_STATES.ended) && !isRequestingMicrophone;
+
+  const handleStartVoiceCall = async () => {
+    if (!activeChat || !activeOtherParticipant) return;
+
+    const targetUserId = String(activeOtherParticipant._id || activeOtherParticipant.id || "");
+    if (!targetUserId) return;
+
+    const started = await startCall({
+      chatId: activeChat._id,
+      participantName: activeOtherParticipant.name || "",
+      participantUserId: targetUserId,
+    });
+
+    if (!started) return;
+
+    currentCallPeerIdRef.current = targetUserId;
+
+    const stream = localAudioStreamRef.current;
+    const offer = await createOffer(stream);
+    if (!offer) {
+      currentCallPeerIdRef.current = "";
+      endCall("Could not start call");
+      return;
+    }
+
+    const socket = getChatSocket();
+    if (!socket) {
+      currentCallPeerIdRef.current = "";
+      endCall("Could not start call");
+      return;
+    }
+
+    socket.emit("call_user", {
+      chatId: String(activeChat._id),
+      targetUserId,
+    });
+
+    socket.emit("call_offer", {
+      chatId: String(activeChat._id),
+      targetUserId,
+      offer,
+    });
+  };
+
+  const handleAcceptVoiceCall = async () => {
+    const pendingOffer = pendingIncomingOfferRef.current;
+    if (!pendingOffer) return;
+
+    const accepted = await acceptIncomingCall();
+    if (!accepted) {
+      const socket = getChatSocket();
+      socket?.emit("call_end", {
+        chatId: pendingOffer.chatId,
+        targetUserId: pendingOffer.fromUserId,
+        reason: "Call could not be accepted",
+      });
+      return;
+    }
+
+    const stream = localAudioStreamRef.current;
+    const remoteDescription = await setRemoteDescription(pendingOffer.offer, stream);
+    if (!remoteDescription) {
+      const socket = getChatSocket();
+      socket?.emit("call_end", {
+        chatId: pendingOffer.chatId,
+        targetUserId: pendingOffer.fromUserId,
+        reason: "Call could not be accepted",
+      });
+      pendingIncomingOfferRef.current = null;
+      currentCallPeerIdRef.current = "";
+      endCall("Call could not be accepted");
+      return;
+    }
+
+    const answer = await createAnswer(stream);
+    if (!answer) {
+      const socket = getChatSocket();
+      socket?.emit("call_end", {
+        chatId: pendingOffer.chatId,
+        targetUserId: pendingOffer.fromUserId,
+        reason: "Call could not be accepted",
+      });
+      pendingIncomingOfferRef.current = null;
+      currentCallPeerIdRef.current = "";
+      endCall("Call could not be accepted");
+      return;
+    }
+
+    const socket = getChatSocket();
+    socket?.emit("call_answer", {
+      chatId: pendingOffer.chatId,
+      targetUserId: pendingOffer.fromUserId,
+      answer,
+    });
+
+    pendingIncomingOfferRef.current = null;
+    clearOutgoingCallTimeout();
+    markCallConnected();
+  };
+
+  const emitCallEndSignal = (reason) => {
+    const targetUserId = currentCallPeerIdRef.current;
+    const activeCallChatId = callContextRef.current?.chatId || activeChatIdRef.current;
+    const socket = getChatSocket();
+    if (!socket || !targetUserId || !activeCallChatId) return;
+
+    socket.emit("call_end", {
+      chatId: String(activeCallChatId),
+      targetUserId: String(targetUserId),
+      reason,
+    });
+  };
+
+  const handleRejectVoiceCall = () => {
+    emitCallEndSignal("Call rejected");
+    clearOutgoingCallTimeout();
+    currentCallPeerIdRef.current = "";
+    pendingIncomingOfferRef.current = null;
+    rejectIncomingCall();
+  };
+
+  const handleEndVoiceCall = () => {
+    emitCallEndSignal("Call ended");
+    clearOutgoingCallTimeout();
+    currentCallPeerIdRef.current = "";
+    pendingIncomingOfferRef.current = null;
+    endCall("Call ended");
+  };
+
+  const handleCloseVoiceCall = () => {
+    clearOutgoingCallTimeout();
+    currentCallPeerIdRef.current = "";
+    pendingIncomingOfferRef.current = null;
+    resetCall();
   };
 
   return (
@@ -508,6 +886,8 @@ const Messages = () => {
           typingUser={typingUser}
           onToggleProfile={() => setIsProfileDrawerOpen((prev) => !prev)}
           isProfileOpen={isProfileDrawerOpen}
+          onStartVoiceCall={handleStartVoiceCall}
+          canStartVoiceCall={canStartVoiceCall}
         />
       </main>
 
@@ -625,6 +1005,33 @@ const Messages = () => {
         className={`chat-profile-backdrop ${isProfileDrawerOpen ? "is-open" : ""}`}
         aria-label="Close profile panel"
         onClick={() => setIsProfileDrawerOpen(false)}
+      />
+
+      <VoiceCallPanel
+        isOpen={isPanelOpen}
+        callState={callState}
+        statusLabel={statusLabel}
+        participantName={callContext.participantName || activeOtherParticipant?.name || ""}
+        incomingCaller={incomingCaller}
+        hasLocalAudio={Boolean(localAudioStream)}
+        isMicrophoneMuted={isMicrophoneMuted}
+        callEndReason={callEndReason}
+        microphoneError={microphoneError}
+        isRequestingMicrophone={isRequestingMicrophone}
+        onAccept={handleAcceptVoiceCall}
+        onReject={handleRejectVoiceCall}
+        onToggleMute={toggleMicrophoneMute}
+        onEnd={handleEndVoiceCall}
+        onClose={handleCloseVoiceCall}
+      />
+
+      <audio
+        ref={registerRemoteAudioElement}
+        autoPlay
+        playsInline
+        className="voice-call-remote-audio"
+        aria-hidden="true"
+        data-has-remote-stream={Boolean(remoteAudioStream)}
       />
     </div>
   );
