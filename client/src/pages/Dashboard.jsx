@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getPosts, createPost, deletePost, offerHelpToPost } from "../api/posts";
 import PostCard from "../components/PostCard";
 import { useReviewNotifications } from "../context/ReviewNotificationContext";
 
+const FEED_BATCH_SIZE = 10;
+
 const Dashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const { unreadCount } = useReviewNotifications();
   const [posts, setPosts] = useState([]);
@@ -16,6 +19,8 @@ const Dashboard = () => {
   const [form, setForm] = useState({ subject: "", topic: "", description: "", creditsOffered: "" });
   const [submitting, setSubmitting] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(FEED_BATCH_SIZE);
+  const infiniteSentinelRef = useRef(null);
 
   const loadPosts = async () => {
     try {
@@ -80,54 +85,193 @@ const Dashboard = () => {
 
   const myPosts = posts.filter((p) => (p.author?._id || p.author) === user?.id);
   const displayPosts = feedTab === "mine" ? myPosts : posts;
-  const openOthersCount = posts.filter(
-    (p) =>
-      p.status === "open" &&
-      user?.id &&
-      (p.author?._id || p.author) !== user.id
-  ).length;
+
+  const visiblePosts = displayPosts.slice(0, visibleCount);
+  const hasMorePosts = visibleCount < displayPosts.length;
+
+  useEffect(() => {
+    setVisibleCount(FEED_BATCH_SIZE);
+  }, [feedTab]);
+
+  useEffect(() => {
+    if (!hasMorePosts || !infiniteSentinelRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        setVisibleCount((prev) => Math.min(prev + FEED_BATCH_SIZE, displayPosts.length));
+      },
+      {
+        root: null,
+        rootMargin: "220px 0px",
+        threshold: 0,
+      }
+    );
+
+    observer.observe(infiniteSentinelRef.current);
+    return () => observer.disconnect();
+  }, [displayPosts.length, hasMorePosts]);
+
+  const profilePath = user?.id ? `/profile/${user.id}` : "";
+  const isRouteActive = (path) => location.pathname === path;
 
   return (
     <div className="skill-dashboard">
+      <header className="skill-dashboard__topbar">
+        <h1 className="skill-dashboard__brand">MicroSkillShare</h1>
+
+        <label className="skill-dashboard__search-wrap" htmlFor="dashboard-search">
+          <input
+            id="dashboard-search"
+            className="skill-dashboard__search"
+            type="search"
+            placeholder="Search"
+            readOnly
+          />
+          <span className="skill-dashboard__search-icon" aria-hidden>
+            ⌕
+          </span>
+        </label>
+      </header>
+
       <div className="skill-dashboard__main">
-      {/* LEFT SECTION — Feed / Wall (readable column, not endless white) */}
-      <section className="skill-dashboard__feed">
-        <div className="skill-dashboard__feed-inner">
-          <div className="skill-dashboard__feed-header">
-            <h1 className="skill-dashboard__feed-title">Skill Sharing Feed</h1>
+        <aside className="skill-dashboard__sidebar">
+          <nav className="skill-dashboard__sidebar-nav" aria-label="Dashboard navigation">
             <button
               type="button"
-              className="button skill-dashboard__create-btn"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/dashboard") ? "is-active" : ""}`}
+              onClick={() => navigate("/dashboard")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>◉</span>
+              <span className="skill-dashboard__sidebar-label">Feed</span>
+            </button>
+
+            <button
+              type="button"
+              className={`skill-dashboard__sidebar-link ${profilePath && isRouteActive(profilePath) ? "is-active" : ""}`}
+              onClick={() => {
+                if (user?.id) navigate(`/profile/${user.id}`);
+              }}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>◌</span>
+              <span className="skill-dashboard__sidebar-label">My profile</span>
+            </button>
+
+            <button
+              type="button"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/messages") ? "is-active" : ""}`}
+              onClick={() => navigate("/messages")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>✉</span>
+              <span className="skill-dashboard__sidebar-label">Messages</span>
+            </button>
+
+            <button
+              type="button"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/notifications") ? "is-active" : ""}`}
+              onClick={() => navigate("/notifications")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>🔔</span>
+              <span className="skill-dashboard__sidebar-label">Notification</span>
+              {unreadCount > 0 ? (
+                <span className="skill-dashboard__sidebar-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+              ) : null}
+            </button>
+
+            <button
+              type="button"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/analytics") ? "is-active" : ""}`}
+              onClick={() => navigate("/analytics")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>◫</span>
+              <span className="skill-dashboard__sidebar-label">Analytics Dashboard</span>
+            </button>
+
+            <button
+              type="button"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/reviews") ? "is-active" : ""}`}
+              onClick={() => navigate("/reviews")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>★</span>
+              <span className="skill-dashboard__sidebar-label">Reviews and rating</span>
+            </button>
+
+            <button
+              type="button"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/complaints") ? "is-active" : ""}`}
+              onClick={() => navigate("/complaints")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>⚑</span>
+              <span className="skill-dashboard__sidebar-label">Complaints</span>
+            </button>
+
+            {user?.isDashboardAdmin ? (
+              <button
+                type="button"
+                className={`skill-dashboard__sidebar-link skill-dashboard__sidebar-link--admin ${location.pathname.startsWith("/admin") ? "is-active" : ""}`}
+                onClick={() => navigate("/admin")}
+              >
+                <span className="skill-dashboard__sidebar-icon" aria-hidden>⎔</span>
+                <span className="skill-dashboard__sidebar-label">Admin panel</span>
+              </button>
+            ) : null}
+          </nav>
+
+          <div className="skill-dashboard__sidebar-footer">
+            <div className="skill-dashboard__identity">
+              <span className="skill-dashboard__identity-avatar" aria-hidden>
+                {user?.name?.charAt(0)?.toUpperCase() || "?"}
+              </span>
+              <div>
+                <p className="skill-dashboard__identity-name">{user?.name || "User"}</p>
+                <p className="skill-dashboard__identity-meta">Credits: {user?.credits != null ? user.credits : "-"}</p>
+              </div>
+            </div>
+
+            <div className="skill-dashboard__sidebar-footer-divider" aria-hidden />
+
+            <button type="button" className="skill-dashboard__logout" onClick={logout}>
+              <span className="skill-dashboard__logout-icon" aria-hidden>↪</span>
+              <span className="skill-dashboard__logout-label">Log out</span>
+            </button>
+          </div>
+        </aside>
+
+        <section className="skill-dashboard__feed">
+          <div className="skill-dashboard__toolbar">
+            <button
+              type="button"
+              className={`skill-dashboard__pill ${feedTab === "all" ? "skill-dashboard__pill--active" : ""}`}
+              onClick={() => setFeedTab("all")}
+            >
+              Feed
+            </button>
+            <button
+              type="button"
+              className={`skill-dashboard__pill ${feedTab === "mine" ? "skill-dashboard__pill--active" : ""}`}
+              onClick={() => setFeedTab("mine")}
+            >
+              My requests
+            </button>
+
+            <button
+              type="button"
+              className="button skill-dashboard__create-request"
               onClick={() => setCreateModalOpen(true)}
             >
               Create help request
             </button>
           </div>
 
-          <div className="skill-dashboard__tabs">
-            <button
-              type="button"
-              className={`skill-dashboard__tab ${feedTab === "all" ? "skill-dashboard__tab--active" : ""}`}
-              onClick={() => setFeedTab("all")}
-            >
-              All Posts
-            </button>
-            <button
-              type="button"
-              className={`skill-dashboard__tab ${feedTab === "mine" ? "skill-dashboard__tab--active" : ""}`}
-              onClick={() => setFeedTab("mine")}
-            >
-              My Posts
-            </button>
-          </div>
-
-          <div className="skill-dashboard__wall">
+          <div className="skill-dashboard__feed-body">
             {loading && <p className="skill-dashboard__message">Loading feed…</p>}
             {error && <p className="error skill-dashboard__error">{error}</p>}
             {!loading && !error && displayPosts.length === 0 && (
               <div className="skill-dashboard__empty">
                 <p className="skill-dashboard__empty-title">
-                  {feedTab === "mine" ? "You have not posted a help request yet" : "No help requests on the wall yet"}
+                  {feedTab === "mine"
+                    ? "You have not posted a help request yet"
+                    : "No help requests on the wall yet"}
                 </p>
                 <p className="skill-dashboard__empty-text">
                   {feedTab === "mine"
@@ -147,7 +291,7 @@ const Dashboard = () => {
             )}
             {!loading && !error && displayPosts.length > 0 && (
               <div className="skill-dashboard__list">
-                {displayPosts.map((post) => (
+                {visiblePosts.map((post) => (
                   <PostCard
                     key={post._id}
                     post={post}
@@ -156,144 +300,17 @@ const Dashboard = () => {
                     onOfferHelp={handleOfferHelp}
                   />
                 ))}
+                {hasMorePosts ? (
+                  <div ref={infiniteSentinelRef} className="skill-dashboard__infinite-sentinel" aria-hidden />
+                ) : null}
               </div>
             )}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* RIGHT SECTION — 70% — User dashboard area */}
-      <aside className="skill-dashboard__panel">
-        <div className="skill-dashboard__summary card">
-          <h3 className="skill-dashboard__summary-title">Wall snapshot</h3>
-          <ul className="skill-dashboard__summary-list">
-            <li>
-              <span className="skill-dashboard__summary-value">{posts.length}</span>
-              <span className="skill-dashboard__summary-label">help requests total</span>
-            </li>
-            <li>
-              <span className="skill-dashboard__summary-value">{myPosts.length}</span>
-              <span className="skill-dashboard__summary-label">posted by you</span>
-            </li>
-            <li>
-              <span className="skill-dashboard__summary-value">{openOthersCount}</span>
-              <span className="skill-dashboard__summary-label">open posts you can help with</span>
-            </li>
-          </ul>
-          <p className="skill-dashboard__summary-tip">
-            After someone helps you, use <strong>Ratings &amp; reviews</strong> to leave feedback.
-          </p>
-        </div>
-
-        <div className="skill-dashboard__profile card">
-          <div className="skill-dashboard__avatar" aria-hidden>
-            {user?.name?.charAt(0)?.toUpperCase() || "?"}
-          </div>
-          <h2 className="skill-dashboard__name">{user?.name || "User"}</h2>
-          <p className="skill-dashboard__credits">
-            <span className="skill-dashboard__credits-label">Credits:</span>{" "}
-            {user?.credits != null ? user.credits : "—"}
-          </p>
-        </div>
-
-        {user?.isDashboardAdmin ? (
-          <div className="skill-dashboard__action card">
-            <button
-              type="button"
-              className="skill-dashboard__action-btn skill-dashboard__action-btn--admin"
-              onClick={() => navigate("/admin")}
-            >
-              <span className="skill-dashboard__action-icon" aria-hidden>⎔</span>
-              Log in as admin
-            </button>
-          </div>
-        ) : null}
-
-        {/* Messaging — placeholder */}
-        <div className="skill-dashboard__action card">
-          <button
-            type="button"
-            className="skill-dashboard__action-btn"
-            onClick={() => navigate("/messages")}
-          >
-            <span className="skill-dashboard__action-icon" aria-hidden>✉</span>
-            Messages
-          </button>
-        </div>
-
-        <div className="skill-dashboard__action card">
-          <button
-            type="button"
-            className="skill-dashboard__action-btn skill-dashboard__action-btn--with-badge"
-            onClick={() => navigate("/notifications")}
-          >
-            <span className="skill-dashboard__action-icon" aria-hidden>🔔</span>
-            Notifications
-            {unreadCount > 0 ? (
-              <span className="skill-dashboard__notif-badge" aria-label={`${unreadCount} unread`}>
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            ) : null}
-          </button>
-        </div>
-
-        <div className="skill-dashboard__action card">
-          <button
-            type="button"
-            className="skill-dashboard__action-btn"
-            onClick={() => navigate("/analytics")}
-          >
-            <span className="skill-dashboard__action-icon" aria-hidden>📊</span>
-            Analytics Dashboard
-          </button>
-        </div>
-
-        <div className="skill-dashboard__action card">
-          <button
-            type="button"
-            className="skill-dashboard__action-btn"
-            onClick={() => navigate("/reviews")}
-          >
-            <span className="skill-dashboard__action-icon" aria-hidden>⭐</span>
-            Ratings &amp; reviews
-          </button>
-        </div>
-
-        <div className="skill-dashboard__action card">
-          <button
-            type="button"
-            className="skill-dashboard__action-btn"
-            onClick={() => navigate("/complaints")}
-          >
-            <span className="skill-dashboard__action-icon" aria-hidden>⚠</span>
-            Complaints
-          </button>
-        </div>
-
-        {/* Find Experts — placeholder */}
-        <div className="skill-dashboard__action card">
-          <button type="button" className="skill-dashboard__action-btn" disabled>
-            <span className="skill-dashboard__action-icon" aria-hidden>🔍</span>
-            Find Experts
-            <span className="skill-dashboard__coming">(Coming soon)</span>
-          </button>
-        </div>
-
-        {/* Buy Credits — placeholder */}
-        <div className="skill-dashboard__action card">
-          <button type="button" className="button skill-dashboard__buy-btn" disabled>
-            Buy Credits
-          </button>
-          <p className="skill-dashboard__coming-text">(Coming in a later module)</p>
-        </div>
-
-        <button type="button" className="button logout skill-dashboard__logout" onClick={logout}>
-          Log out
-        </button>
-      </aside>
+        <aside className="skill-dashboard__right-pane" aria-label="Secondary pane" />
       </div>
 
-      {/* Messages drawer placeholder */}
       {/* Create Post modal */}
       {createModalOpen && (
         <div className="skill-dashboard__modal-overlay" onClick={closeCreateModal} aria-hidden />

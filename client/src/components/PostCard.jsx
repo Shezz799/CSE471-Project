@@ -23,6 +23,7 @@ const PostCard = ({ post, currentUser, onDelete, onOfferHelp }) => {
   const [expanded, setExpanded] = useState(false);
   const [offering, setOffering] = useState(false);
   const authorName = post.author?.name || "Unknown";
+  const authorInitial = authorName?.charAt(0)?.toUpperCase() || "?";
   const authorId = post.author?._id || post.author;
   const isAuthor = currentUser && authorId && currentUser.id === authorId;
   const isPanelAdmin = currentUser?.isDashboardAdmin;
@@ -41,6 +42,15 @@ const PostCard = ({ post, currentUser, onDelete, onOfferHelp }) => {
   const displayDescription = showExpand && !expanded
     ? getFirstSentences(description)
     : description;
+
+  const handleCardClick = (event) => {
+    if (!showExpand) return;
+
+    const interactiveTarget = event.target.closest("button, a, input, textarea, select, label");
+    if (interactiveTarget) return;
+
+    setExpanded((prev) => !prev);
+  };
 
   const timestamp = post.createdAt
     ? new Date(post.createdAt).toLocaleString("en-US", {
@@ -72,54 +82,62 @@ const PostCard = ({ post, currentUser, onDelete, onOfferHelp }) => {
   };
 
   return (
-    <article className="post-card">
-      <div className="post-card__meta">
-        <span className="post-card__author">{authorName}</span>
-        <span className="post-card__date">{timestamp}</span>
-        {canDelete && (
-          <button type="button" className="post-card__delete" onClick={handleDelete}>
-            Remove
-          </button>
-        )}
-      </div>
-      <h3 className="post-card__subject">{post.subject}</h3>
-      <p className="post-card__topic">Topic: {post.topic}</p>
-      <p className="post-card__description">{displayDescription}</p>
-      {showExpand && (
-        <button
-          type="button"
-          className="post-card__toggle-details"
-          onClick={() => setExpanded((e) => !e)}
-        >
-          {expanded ? "Minimize" : "Show Details"}
-        </button>
-      )}
-      <div className="post-card__footer">
-        {post.creditsOffered > 0 ? (
-          <p className="post-card__credits">{post.creditsOffered} credits offered</p>
-        ) : (
-          <p className="post-card__credits-none" />
-        )}
-        
-        <div className="post-card__actions">
-          <span className={`post-card__status post-card__status--${post.status}`}>
-            {post.status}
-          </span>
-          
-          {canOfferHelp && (
-            <button 
-              type="button" 
+    <article
+      className={`post-card ${showExpand ? "post-card--expandable" : ""}`}
+      onClick={handleCardClick}
+    >
+      <div className="post-card__layout">
+        <div className="post-card__left" aria-hidden>
+          <span className="post-card__author-avatar">{authorInitial}</span>
+        </div>
+
+        <div className="post-card__center">
+          <div className="post-card__head">
+            <span className="post-card__author">{authorName}</span>
+            {timestamp && <span className="post-card__date">{timestamp}</span>}
+          </div>
+
+          <h3 className="post-card__subject">{post.subject}</h3>
+          <p className="post-card__description">{displayDescription}</p>
+
+          {showExpand && (
+            <button
+              type="button"
+              className="post-card__toggle-details"
+              onClick={() => setExpanded((e) => !e)}
+            >
+              {expanded ? "Minimize" : "Show Details"}
+            </button>
+          )}
+
+          <div className="post-card__meta-line">
+            {post.topic ? <p className="post-card__topic">{post.topic}</p> : null}
+            <span className={`post-card__status post-card__status--${post.status}`}>
+              {post.status}
+            </span>
+            {post.creditsOffered > 0 && (
+              <span className="post-card__credits">{post.creditsOffered} credits</span>
+            )}
+          </div>
+        </div>
+
+        <div className="post-card__right">
+          {canDelete ? (
+            <button type="button" className="post-card__delete" onClick={handleDelete}>
+              Remove
+            </button>
+          ) : canOfferHelp ? (
+            <button
+              type="button"
               className="button button--primary post-card__offer-btn"
               onClick={handleOfferHelp}
               disabled={offering}
             >
               {offering ? "Offering..." : "Offer Help"}
             </button>
-          )}
-
-          {alreadyOffered && (
+          ) : alreadyOffered ? (
             <span className="post-card__offered-badge">You offered help</span>
-          )}
+          ) : null}
         </div>
       </div>
 
