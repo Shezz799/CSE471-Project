@@ -1,5 +1,6 @@
 const Post = require("../models/Post");
 const { attachRatingSummariesToPosts } = require("../services/reviewStats");
+const { triggerNotification } = require("../services/pusherService");
 
 // GET /api/posts - list all posts (skill share feed)
 const getPosts = async (req, res) => {
@@ -38,6 +39,16 @@ const createPost = async (req, res) => {
       .populate("offers", "name email department skills")
       .lean();
     await attachRatingSummariesToPosts([populated]);
+
+    // Send a global notification
+    triggerNotification("global", "post:created", {
+      postId: post._id,
+      subject: post.subject,
+      topic: post.topic,
+      authorName: req.user.name || "Someone",
+      authorId: req.user._id.toString(),
+    });
+
     return res.status(201).json({ success: true, data: populated });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -109,6 +120,15 @@ const offerHelp = async (req, res) => {
       .populate("offers", "name email department skills")
       .lean();
     await attachRatingSummariesToPosts([populated]);
+
+    // Send Realtime Notification using Pusher to the author of the post
+    triggerNotification(`user-${post.author.toString()}`, "help:offered", {
+      postId: post._id,
+      postSubject: post.subject,
+      offerName: req.user.name || "Someone",
+      message: `Offered to help with: ${post.subject}`,
+    });
+
     return res.status(200).json({ success: true, data: populated });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

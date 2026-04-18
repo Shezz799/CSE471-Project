@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { getPosts, createPost, deletePost, offerHelpToPost } from "../api/posts";
 import PostCard from "../components/PostCard";
 import { useReviewNotifications } from "../context/ReviewNotificationContext";
+import toast from "react-hot-toast";
 
 const FEED_BATCH_SIZE = 10;
 
@@ -78,6 +79,7 @@ const Dashboard = () => {
       const { data } = await offerHelpToPost(postId);
       // Replace the old post with the updated one
       setPosts((prev) => prev.map((p) => (p._id === postId ? data.data : p)));
+      toast.success("Successfully offered help! The author has been notified.");
     } catch (err) {
       alert(err.response?.data?.message || "Failed to offer help");
     }

@@ -20,10 +20,13 @@ import AdminBanned from "./pages/admin/AdminBanned";
 import AdminLowRatings from "./pages/admin/AdminLowRatings";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
+import OfferNotifications from "./components/OfferNotifications";
 
 const App = () => {
   return (
-    <Routes>
+    <>
+      <OfferNotifications />
+      <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
       <Route path="/appeal" element={<Appeal />} />
@@ -167,6 +170,7 @@ const App = () => {
       <Route path="/feed" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </>
   );
 };
 

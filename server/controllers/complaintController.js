@@ -8,6 +8,7 @@ const {
   COMPLAINT_PIPELINE_STAGES,
 } = require("../models/Complaint");
 const { sendMail } = require("../utils/mail");
+const { triggerNotification } = require("../services/pusherService");
 
 exports.createComplaint = async (req, res) => {
   try {
@@ -86,6 +87,13 @@ exports.createComplaint = async (req, res) => {
       .populate("subjectUser", "name email")
       .populate("post", "subject topic")
       .lean();
+
+    // Send notification to admins
+    triggerNotification("admin-channel", "complaint:created", {
+      complaintId: doc._id,
+      category: doc.category,
+      complainantName: req.user.name || "Someone",
+    });
 
     return res.status(201).json({ success: true, data: populated });
   } catch (error) {
