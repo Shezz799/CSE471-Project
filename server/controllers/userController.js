@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
+const { normalizeUserCreditFields } = require("./creditController");
 const { getFullReviewStatsForUser } = require("../services/reviewStats");
 const { isDashboardAdminUser } = require("../utils/adminAccess");
 
@@ -16,7 +17,9 @@ const signToken = (userId) => {
 };
 
 const isAllowedDomain = (email) => {
-  return typeof email === "string" && email.trim().toLowerCase().endsWith("@gmail.com");
+  if (typeof email !== "string") return false;
+  const normalized = email.trim().toLowerCase();
+  return normalized.endsWith("@gmail.com") || normalized.endsWith("@g.bracu.ac.bd");
 };
 
 const verifyGoogleToken = async (idToken) => {
@@ -28,6 +31,9 @@ const verifyGoogleToken = async (idToken) => {
 };
 
 const buildUserResponse = (user) => {
+  const totalCredits = user.totalCredits != null ? Number(user.totalCredits) : 0;
+  const heldCredits = user.heldCredits != null ? user.heldCredits : 0;
+
   return {
     id: user._id,
     name: user.name,
@@ -41,12 +47,26 @@ const buildUserResponse = (user) => {
     portfolioUrl: user.portfolioUrl,
     profileCompleted: user.profileCompleted || false,
     role: user.role || "user",
-    credits: user.credits != null ? user.credits : 5,
+    credits: totalCredits,
+    totalCredits,
+    heldCredits,
     accountStatus: user.accountStatus || "active",
     isDashboardAdmin: isDashboardAdminUser(user),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
+};
+
+const attachWalletSnapshot = async (user) => {
+  if (!user) return user;
+  const wallet = await normalizeUserCreditFields(user._id || user.id);
+  if (!wallet) return user;
+
+  const plainUser = typeof user.toObject === "function" ? user.toObject() : { ...user };
+  plainUser.totalCredits = Number(wallet.totalCredits || 0);
+  plainUser.heldCredits = Number(wallet.heldCredits || 0);
+  plainUser.credits = plainUser.totalCredits;
+  return plainUser;
 };
 
 exports.register = async (req, res) => {
@@ -62,7 +82,10 @@ exports.register = async (req, res) => {
     const name = payload.name || payload.given_name || "User";
 
     if (!payload.email_verified || !isAllowedDomain(email)) {
-      return res.status(403).json({ success: false, message: "Only verified Gmail accounts are allowed" });
+      return res.status(403).json({
+        success: false,
+        message: "Only verified Gmail or @g.bracu.ac.bd accounts are allowed",
+      });
     }
 
     const existingUser = await User.findOne({ email }).select("-password");
@@ -81,12 +104,13 @@ exports.register = async (req, res) => {
     });
 
     const token = signToken(user._id);
+    const walletReadyUser = await attachWalletSnapshot(user);
 
     return res.status(201).json({
       success: true,
       message: "User registered",
       data: {
-        user: buildUserResponse(user),
+        user: buildUserResponse(walletReadyUser),
         token,
       },
     });
@@ -107,7 +131,10 @@ exports.login = async (req, res) => {
     const email = String(payload.email || "").trim().toLowerCase();
 
     if (!payload.email_verified || !isAllowedDomain(email)) {
-      return res.status(403).json({ success: false, message: "Only verified Gmail accounts are allowed" });
+      return res.status(403).json({
+        success: false,
+        message: "Only verified Gmail or @g.bracu.ac.bd accounts are allowed",
+      });
     }
 
     const user = await User.findOne({ email });
@@ -132,12 +159,13 @@ exports.login = async (req, res) => {
     }
 
     const token = signToken(user._id);
+    const walletReadyUser = await attachWalletSnapshot(user);
 
     return res.status(200).json({
       success: true,
       message: "Login successful",
       data: {
-        user: buildUserResponse(user),
+        user: buildUserResponse(walletReadyUser),
         token,
       },
     });
@@ -147,11 +175,12 @@ exports.login = async (req, res) => {
 };
 
 exports.profile = async (req, res) => {
+  const walletReadyUser = await attachWalletSnapshot(req.user);
   return res.status(200).json({
     success: true,
     message: "Profile fetched",
     data: {
-      user: buildUserResponse(req.user),
+      user: buildUserResponse(walletReadyUser),
     },
   });
 };
@@ -243,12 +272,13 @@ exports.updateProfile = async (req, res) => {
       },
       { new: true, runValidators: true }
     );
+    const walletReadyUser = await attachWalletSnapshot(user);
 
     return res.status(200).json({
       success: true,
       message: "Profile updated",
       data: {
-        user: buildUserResponse(user),
+        user: buildUserResponse(walletReadyUser),
       },
     });
   } catch (error) {
@@ -269,10 +299,12 @@ exports.getUserAnalytics = async (req, res) => {
     const complaintsFiledByYou = await Complaint.countDocuments({ complainant: userId });
 
     // Combine current user credits with review stats and complaints
+    const normalizedUser = await normalizeUserCreditFields(userId);
     return res.status(200).json({
       success: true,
       data: {
-        currentCredits: req.user.credits || 0,
+        currentCredits: Number(normalizedUser?.totalCredits || 0),
+        heldCredits: Number(normalizedUser?.heldCredits || 0),
         reviewStats,
         complaintsAgainstYou,
         complaintsFiledByYou

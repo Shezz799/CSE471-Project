@@ -16,13 +16,19 @@ import VoiceCallPanel from "../components/chat/VoiceCallPanel";
 import StarAverage from "../components/ratings/StarAverage";
 import { getReviewStats, getReviewsForUser } from "../api/reviews";
 import useVoiceCallState, { VOICE_CALL_STATES } from "../hooks/useVoiceCallState";
+import {
+  fetchActiveSessionByChat,
+  fetchMyCredits,
+  requestEndSession,
+  respondEndSession,
+} from "../api/session";
 
 const OUTGOING_CALL_TIMEOUT_MS = 30000;
 
 const Messages = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, token } = useAuth();
+  const { user, token, setUserProfile } = useAuth();
 
   const [users, setUsers] = useState([]);
   const [chats, setChats] = useState([]);
@@ -41,6 +47,9 @@ const Messages = () => {
   const [profileReviews, setProfileReviews] = useState([]);
   const [profileRatingsLoading, setProfileRatingsLoading] = useState(false);
   const [listsReady, setListsReady] = useState(false);
+  const [activeSession, setActiveSession] = useState(null);
+  const [pendingEndSessionRequest, setPendingEndSessionRequest] = useState(null);
+  const [sessionActionLoading, setSessionActionLoading] = useState("");
 
   const {
     callState,
@@ -82,6 +91,26 @@ const Messages = () => {
   const callContextRef = useRef(callContext);
   const outgoingCallTimeoutRef = useRef(null);
   const pendingIncomingOfferRef = useRef(null);
+
+  const getSessionChatId = (session) => String(session?.chatId?._id || session?.chatId || "");
+  const getSessionId = (session) => String(session?._id || session?.sessionId || "");
+
+  const refreshCreditSummary = async () => {
+    try {
+      const { data } = await fetchMyCredits();
+      const nextCredits = data?.data;
+      if (!nextCredits || !user) return;
+
+      setUserProfile({
+        ...user,
+        credits: nextCredits.totalCredits,
+        totalCredits: nextCredits.totalCredits,
+        heldCredits: nextCredits.heldCredits,
+      });
+    } catch {
+      // Do not block chat flow when credit refresh fails.
+    }
+  };
 
   const activeChat = useMemo(
     () => chats.find((chat) => chat._id === activeChatId) || null,
@@ -404,6 +433,83 @@ const Messages = () => {
       endCall(reason || "Target user is unavailable");
     };
 
+    const onSessionStarted = ({ session }) => {
+      const nextSession = session || null;
+      if (!nextSession) return;
+
+      const sessionChatId = getSessionChatId(nextSession);
+      if (!sessionChatId) return;
+
+      if (String(activeChatIdRef.current) === sessionChatId) {
+        setActiveSession(nextSession);
+      }
+    };
+
+    const onEndSessionRequest = ({ sessionId, chatId, fromUserId, fromUserName }) => {
+      const activeSessionId = getSessionId(activeSession || {});
+      const sameSession = activeSessionId && String(activeSessionId) === String(sessionId || "");
+      const sameChat = String(activeChatIdRef.current) === String(chatId || "");
+
+      if (!sameSession && !sameChat) return;
+
+      setPendingEndSessionRequest({
+        sessionId: String(sessionId || ""),
+        chatId: String(chatId || ""),
+        fromUserId: String(fromUserId || ""),
+        fromUserName: fromUserName || "The other user",
+      });
+      setActiveSession((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: "ending",
+          endRequestedBy: fromUserId || prev.endRequestedBy,
+        };
+      });
+    };
+
+    const onSessionEnded = async ({ sessionId, chatId, status, reason }) => {
+      const activeSessionId = getSessionId(activeSession || {});
+      const sameSession = activeSessionId && String(activeSessionId) === String(sessionId || "");
+      const sameChat = String(activeChatIdRef.current) === String(chatId || "");
+
+      if (!sameSession && !sameChat) {
+        return;
+      }
+
+      setPendingEndSessionRequest(null);
+
+      if (status === "active") {
+        setActiveSession((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: "active",
+            endRequestedBy: null,
+          };
+        });
+        return;
+      }
+
+      setActiveSession(null);
+
+      // Close the ended session chat to force a clean re-entry through sidebar selection.
+      setActiveChatId("");
+      setMessages([]);
+      setMessageText("");
+      setSelectedFile(null);
+      setTypingUser("");
+      setIsProfileDrawerOpen(false);
+
+      if (status === "completed" || status === "cancelled") {
+        await refreshCreditSummary();
+      }
+
+      if (reason && callStateRef.current === VOICE_CALL_STATES.connected) {
+        handleEndVoiceCall();
+      }
+    };
+
     const unregisterIceCandidateHandler = registerOnIceCandidate((candidate) => {
       const targetUserId = currentCallPeerIdRef.current;
       const activeCallChatId = callContextRef.current?.chatId || activeChatIdRef.current;
@@ -429,6 +535,9 @@ const Messages = () => {
     socket.on("call_end", onCallEnd);
     socket.on("call_busy", onCallBusy);
     socket.on("call_unavailable", onCallUnavailable);
+    socket.on("session_started", onSessionStarted);
+    socket.on("end_session_request", onEndSessionRequest);
+    socket.on("session_ended", onSessionEnded);
 
     return () => {
       unregisterIceCandidateHandler?.();
@@ -446,8 +555,11 @@ const Messages = () => {
       socket.off("call_end", onCallEnd);
       socket.off("call_busy", onCallBusy);
       socket.off("call_unavailable", onCallUnavailable);
+      socket.off("session_started", onSessionStarted);
+      socket.off("end_session_request", onEndSessionRequest);
+      socket.off("session_ended", onSessionEnded);
     };
-  }, [token]);
+  }, [token, activeSession, user]);
 
   useEffect(() => {
     if (callState !== VOICE_CALL_STATES.calling) {
@@ -485,6 +597,21 @@ const Messages = () => {
     loadMessages(activeChatId);
     const socket = getChatSocket();
     socket?.emit("chat:join", activeChatId);
+
+    let cancelled = false;
+    fetchActiveSessionByChat(activeChatId)
+      .then((response) => {
+        if (cancelled) return;
+        setActiveSession(response?.data?.data?.session || null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActiveSession(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeChatId]);
 
   useEffect(() => {
@@ -581,6 +708,12 @@ const Messages = () => {
 
   const canStartVoiceCall =
     (callState === VOICE_CALL_STATES.idle || callState === VOICE_CALL_STATES.ended) && !isRequestingMicrophone;
+
+  const activeSessionId = getSessionId(activeSession || {});
+  const canEndSession = Boolean(activeSessionId) && activeSession?.status === "active";
+  const sessionStatusLabel = activeSession
+    ? `Session: ${String(activeSession.status || "active").replace("_", " ")}`
+    : "";
 
   const handleStartVoiceCall = async () => {
     if (!activeChat || !activeOtherParticipant) return;
@@ -715,6 +848,47 @@ const Messages = () => {
     currentCallPeerIdRef.current = "";
     pendingIncomingOfferRef.current = null;
     resetCall();
+  };
+
+  const handleRequestEndSession = async () => {
+    if (!activeSessionId) return;
+
+    setSessionActionLoading("request-end");
+    try {
+      const response = await requestEndSession(activeSessionId);
+      const updatedSession = response?.data?.data?.session;
+      if (updatedSession) {
+        setActiveSession(updatedSession);
+      }
+    } catch (error) {
+      alert(error?.response?.data?.message || "Failed to request session end");
+    } finally {
+      setSessionActionLoading("");
+    }
+  };
+
+  const handleRespondToEndSession = async (decision) => {
+    if (!pendingEndSessionRequest?.sessionId) return;
+
+    setSessionActionLoading(decision === "accept" ? "accept-end" : "reject-end");
+
+    try {
+      const response = await respondEndSession(pendingEndSessionRequest.sessionId, decision);
+      const nextSession = response?.data?.data?.session;
+
+      if (decision === "accept") {
+        setActiveSession(null);
+        await refreshCreditSummary();
+      } else if (nextSession) {
+        setActiveSession(nextSession);
+      }
+
+      setPendingEndSessionRequest(null);
+    } catch (error) {
+      alert(error?.response?.data?.message || "Failed to respond to session end request");
+    } finally {
+      setSessionActionLoading("");
+    }
   };
 
   return (
@@ -888,6 +1062,9 @@ const Messages = () => {
           isProfileOpen={isProfileDrawerOpen}
           onStartVoiceCall={handleStartVoiceCall}
           canStartVoiceCall={canStartVoiceCall}
+          onEndSessionRequest={handleRequestEndSession}
+          canEndSession={canEndSession && !sessionActionLoading}
+          sessionStatusLabel={sessionStatusLabel}
         />
       </main>
 
@@ -1006,6 +1183,36 @@ const Messages = () => {
         aria-label="Close profile panel"
         onClick={() => setIsProfileDrawerOpen(false)}
       />
+
+      {pendingEndSessionRequest && (
+        <>
+          <div className="chat-session-end-modal__overlay" aria-hidden />
+          <section className="chat-session-end-modal" role="dialog" aria-modal="true" aria-label="End session request">
+            <h3>End Session Request</h3>
+            <p>
+              <strong>{pendingEndSessionRequest.fromUserName}</strong> wants to end this paid session.
+            </p>
+            <div className="chat-session-end-modal__actions">
+              <button
+                type="button"
+                className="chat-session-end-modal__accept"
+                onClick={() => handleRespondToEndSession("accept")}
+                disabled={Boolean(sessionActionLoading)}
+              >
+                {sessionActionLoading === "accept-end" ? "Accepting..." : "Accept End"}
+              </button>
+              <button
+                type="button"
+                className="chat-session-end-modal__reject"
+                onClick={() => handleRespondToEndSession("reject")}
+                disabled={Boolean(sessionActionLoading)}
+              >
+                {sessionActionLoading === "reject-end" ? "Rejecting..." : "Reject"}
+              </button>
+            </div>
+          </section>
+        </>
+      )}
 
       <VoiceCallPanel
         isOpen={isPanelOpen}

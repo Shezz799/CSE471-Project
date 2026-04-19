@@ -5,3 +5,6 @@ export const getPostById = (id) => api.get(`/api/posts/${id}`);
 export const createPost = (data) => api.post("/api/posts", data);
 export const deletePost = (id) => api.delete(`/api/posts/${id}`);
 export const offerHelpToPost = (id) => api.post(`/api/posts/${id}/offer`);
+export const getMyOfferNotifications = () => api.get("/api/posts/my-offer-notifications");
+export const rejectHelpOffer = (postId, offerUserId) =>
+	api.post(`/api/posts/${postId}/offers/${offerUserId}/reject`);

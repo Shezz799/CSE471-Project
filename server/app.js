@@ -28,6 +28,7 @@ app.use("/api/posts", require("./routes/postRoutes"));
 app.use("/api/invite", require("./routes/inviteRoutes"));
 app.use("/api/chats", require("./routes/chatRoutes"));
 app.use("/api/messages", require("./routes/messageRoutes"));
+app.use("/api/session", require("./routes/sessionRoutes"));
 app.use("/api/reviews", require("./routes/reviewRoutes"));
 app.use("/api/complaints", require("./routes/complaintRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));

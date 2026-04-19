@@ -87,6 +87,17 @@ const userSchema = new mongoose.Schema({
     maxlength: 4000,
     default: "",
   },
+  totalCredits: {
+    type: Number,
+    default: 5,
+    min: 0,
+  },
+  heldCredits: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  // Legacy field preserved for backward compatibility with existing clients.
   credits: {
     type: Number,
     default: 5,

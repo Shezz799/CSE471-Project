@@ -23,6 +23,9 @@ const ConversationPanel = ({
   isProfileOpen,
   onStartVoiceCall,
   canStartVoiceCall,
+  onEndSessionRequest,
+  canEndSession,
+  sessionStatusLabel,
 }) => {
   const composerInputRef = useRef(null);
 
@@ -66,6 +69,21 @@ const ConversationPanel = ({
           </div>
         </div>
         <div className="chat-header-actions">
+          {sessionStatusLabel ? (
+            <span className="chat-session-status">{sessionStatusLabel}</span>
+          ) : null}
+
+          {canEndSession ? (
+            <button
+              type="button"
+              className="chat-end-session-btn"
+              aria-label="End current session"
+              onClick={onEndSessionRequest}
+            >
+              End Session
+            </button>
+          ) : null}
+
           <button
             type="button"
             className="chat-call-btn"

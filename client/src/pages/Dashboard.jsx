@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getPosts, createPost, deletePost, offerHelpToPost } from "../api/posts";
+import { fetchMyCredits } from "../api/session";
 import PostCard from "../components/PostCard";
 import { useReviewNotifications } from "../context/ReviewNotificationContext";
 import toast from "react-hot-toast";
@@ -11,7 +12,7 @@ const FEED_BATCH_SIZE = 10;
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, setUserProfile } = useAuth();
   const { unreadCount } = useReviewNotifications();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,34 @@ const Dashboard = () => {
   useEffect(() => {
     loadPosts();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadWalletCredits = async () => {
+      try {
+        const { data } = await fetchMyCredits();
+        if (cancelled || !user) return;
+
+        const nextCredits = data?.data;
+        if (!nextCredits) return;
+
+        setUserProfile({
+          ...user,
+          credits: Number(nextCredits.totalCredits || 0),
+          totalCredits: Number(nextCredits.totalCredits || 0),
+          heldCredits: Number(nextCredits.heldCredits || 0),
+        });
+      } catch {
+        // Wallet fetch is non-blocking for dashboard rendering.
+      }
+    };
+
+    loadWalletCredits();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
@@ -262,7 +291,10 @@ const Dashboard = () => {
               </span>
               <div>
                 <p className="skill-dashboard__identity-name">{user?.name || "User"}</p>
-                <p className="skill-dashboard__identity-meta">Credits: {user?.credits != null ? user.credits : "-"}</p>
+                <p className="skill-dashboard__identity-meta">
+                  Credits: {user?.totalCredits != null ? user.totalCredits : "-"}
+                  {user?.heldCredits ? ` (held ${user.heldCredits})` : ""}
+                </p>
               </div>
             </div>
 
