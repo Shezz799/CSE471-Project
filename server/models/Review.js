@@ -23,6 +23,14 @@ const reviewSchema = new mongoose.Schema(
       min: 1,
       max: 5,
     },
+    criteria: {
+      topicKnowledge: { type: Number, min: 1, max: 5, required: true },
+      teachingClarity: { type: Number, min: 1, max: 5, required: true },
+      communication: { type: Number, min: 1, max: 5, required: true },
+      patience: { type: Number, min: 1, max: 5, required: true },
+      professionalism: { type: Number, min: 1, max: 5, required: true },
+      helpfulness: { type: Number, min: 1, max: 5, required: true },
+    },
     comment: {
       type: String,
       trim: true,

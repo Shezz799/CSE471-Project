@@ -1,4 +1,5 @@
 console.log("Starting server...");
+const path = require("path");
 const express = require("express");
 const http = require("http");
 const dotenv = require("dotenv");
@@ -6,7 +7,7 @@ const cors = require("cors");
 const connectDB = require("./config/db");
 const { initSocketServer } = require("./socket/socketServer");
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, ".env") });
 connectDB();
 
 const app = express();
@@ -22,6 +23,8 @@ app.use(
   })
 );
 
+const { bkashCallbackGet } = require("./controllers/creditStoreController");
+app.get("/callback", bkashCallbackGet);
 
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/posts", require("./routes/postRoutes"));
@@ -33,6 +36,7 @@ app.use("/api/reviews", require("./routes/reviewRoutes"));
 app.use("/api/complaints", require("./routes/complaintRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/moderation", require("./routes/moderationRoutes"));
+app.use("/api/credits", require("./routes/creditStoreRoutes"));
 
 const PORT = process.env.PORT || 5000;
 

@@ -5,7 +5,7 @@ import { useAuth } from "./AuthContext";
 const ReviewNotificationContext = createContext(null);
 
 export function ReviewNotificationProvider({ children }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [items, setItems] = useState([]);
 
   useEffect(() => {
@@ -19,6 +19,7 @@ export function ReviewNotificationProvider({ children }) {
         [
           {
             ...payload,
+            notificationKind: "review",
             localId: `${payload.reviewId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             receivedAt: Date.now(),
             read: false,
@@ -28,11 +29,66 @@ export function ReviewNotificationProvider({ children }) {
       );
     };
 
+    const onWalletUpdate = (payload) => {
+      if (!payload?.title) return;
+      setItems((prev) =>
+        [
+          {
+            ...payload,
+            notificationKind: "wallet",
+            localId: `w-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+            receivedAt: Date.now(),
+            read: false,
+          },
+          ...prev,
+        ].slice(0, 40)
+      );
+    };
+
+    const onPlatformIncome = (payload) => {
+      if ((user?.role || "") !== "admin") return;
+      if (!payload?.title) return;
+      setItems((prev) =>
+        [
+          {
+            ...payload,
+            notificationKind: "admin_income",
+            localId: `p-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+            receivedAt: Date.now(),
+            read: false,
+          },
+          ...prev,
+        ].slice(0, 40)
+      );
+    };
+
+    const onComplaintUpdate = (payload) => {
+      if (!payload?.title) return;
+      setItems((prev) =>
+        [
+          {
+            ...payload,
+            notificationKind: "complaint",
+            localId: `c-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+            receivedAt: Date.now(),
+            read: false,
+          },
+          ...prev,
+        ].slice(0, 40)
+      );
+    };
+
     socket.on("review:received", onReviewReceived);
+    socket.on("wallet:update", onWalletUpdate);
+    socket.on("platform:income", onPlatformIncome);
+    socket.on("complaint:update", onComplaintUpdate);
     return () => {
       socket.off("review:received", onReviewReceived);
+      socket.off("wallet:update", onWalletUpdate);
+      socket.off("platform:income", onPlatformIncome);
+      socket.off("complaint:update", onComplaintUpdate);
     };
-  }, [token]);
+  }, [token, user?.role]);
 
   const dismiss = useCallback((localId) => {
     setItems((prev) => prev.filter((i) => i.localId !== localId));

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useReviewNotifications } from "../context/ReviewNotificationContext";
 import { useAuth } from "../context/AuthContext";
@@ -18,6 +18,7 @@ const Notifications = () => {
   const [creditsToHold, setCreditsToHold] = useState("1");
   const [offerActionLoading, setOfferActionLoading] = useState("");
   const [endActionLoading, setEndActionLoading] = useState("");
+  const [offersSectionOpen, setOffersSectionOpen] = useState(true);
 
   const loadOfferNotifications = useCallback(async () => {
     if (!token) {
@@ -197,7 +198,14 @@ const Notifications = () => {
     };
   }, [token, loadOfferNotifications, loadPendingEndRequests]);
 
-  const reviewCount = items.length;
+  const reviewItems = useMemo(
+    () => items.filter((i) => !i.notificationKind || i.notificationKind === "review"),
+    [items]
+  );
+  const walletItems = useMemo(() => items.filter((i) => i.notificationKind === "wallet"), [items]);
+  const complaintItems = useMemo(() => items.filter((i) => i.notificationKind === "complaint"), [items]);
+  const adminIncomeItems = useMemo(() => items.filter((i) => i.notificationKind === "admin_income"), [items]);
+  const totalListItems = items.length;
 
   return (
     <div className="module2-page notifications-page">
@@ -205,12 +213,13 @@ const Notifications = () => {
         <div>
           <h1 className="module2-page__title">Notifications</h1>
           <p className="module2-page__subtitle">
-            New <strong>reviews</strong> and other alerts appear here. Open{" "}
-            <Link to="/reviews">Ratings &amp; reviews</Link> for your full received history.
+            <strong>Reviews</strong>, <strong>complaints</strong>, <strong>credits &amp; gifts</strong>, and (for admins){" "}
+            <strong>platform sales</strong> show here. Open <Link to="/reviews">Ratings &amp; reviews</Link> for your full
+            received history.
           </p>
         </div>
         <div className="notifications-page__header-actions">
-          {reviewCount > 0 && (
+          {totalListItems > 0 && (
             <button type="button" className="button button--ghost notifications-page__clear" onClick={clearAll}>
               Clear all
             </button>
@@ -222,39 +231,69 @@ const Notifications = () => {
       </header>
 
       <section className="card module2-card notifications-page__offer-card">
-        <h2 className="notifications-page__section-title">Help offers on your posts</h2>
-        <p className="notifications-page__section-subtitle">
-          Missed a popup? You can still accept or reject pending offers here.
-        </p>
+        <button
+          type="button"
+          className="notifications-page__collapsible-trigger"
+          onClick={() => setOffersSectionOpen((v) => !v)}
+          aria-expanded={offersSectionOpen}
+          aria-controls="notifications-offers-panel"
+        >
+          <span className="notifications-page__collapsible-trigger-text">
+            <span
+              id="notifications-offers-heading"
+              className="notifications-page__section-title notifications-page__section-title--trigger"
+            >
+              Help offers on your posts
+            </span>
+            <span className="notifications-page__section-subtitle">
+              Missed a popup? You can still accept or reject pending offers here.
+            </span>
+          </span>
+          <span
+            className={`notifications-page__collapsible-chevron${offersSectionOpen ? " notifications-page__collapsible-chevron--open" : ""}`}
+            aria-hidden
+          />
+        </button>
 
-        {offersLoading ? (
-          <p className="module2-muted">Loading pending offers...</p>
-        ) : offerItems.length === 0 ? (
-          <p className="module2-muted">No pending help offers right now.</p>
-        ) : (
-          <ul className="notifications-page__offer-list">
-            {offerItems.map((offer) => (
-              <li key={offer.id} className="notifications-page__offer-item">
-                <div className="notifications-page__offer-main">
-                  <p className="notifications-page__offer-line">
-                    <strong>{offer.helperName}</strong> offered to help with <strong>{offer.postSubject}</strong>
-                    {offer.postTopic ? <span className="notifications-page__item-meta"> · {offer.postTopic}</span> : null}
-                  </p>
-                  <p className="notifications-page__offer-meta">
-                    Suggested credits: {offer.suggestedCredits > 0 ? offer.suggestedCredits : "not set"}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="button notifications-page__offer-action"
-                  onClick={() => openOfferModal(offer)}
-                >
-                  Review offer
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div
+          id="notifications-offers-panel"
+          role="region"
+          aria-labelledby="notifications-offers-heading"
+          hidden={!offersSectionOpen}
+        >
+          {offersSectionOpen ? (
+            offersLoading ? (
+              <p className="module2-muted">Loading pending offers...</p>
+            ) : offerItems.length === 0 ? (
+              <p className="module2-muted">No pending help offers right now.</p>
+            ) : (
+              <ul className="notifications-page__offer-list">
+                {offerItems.map((offer) => (
+                  <li key={offer.id} className="notifications-page__offer-item">
+                    <div className="notifications-page__offer-main">
+                      <p className="notifications-page__offer-line">
+                        <strong>{offer.helperName}</strong> offered to help with <strong>{offer.postSubject}</strong>
+                        {offer.postTopic ? (
+                          <span className="notifications-page__item-meta"> · {offer.postTopic}</span>
+                        ) : null}
+                      </p>
+                      <p className="notifications-page__offer-meta">
+                        Suggested credits: {offer.suggestedCredits > 0 ? offer.suggestedCredits : "not set"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="button notifications-page__offer-action"
+                      onClick={() => openOfferModal(offer)}
+                    >
+                      Review offer
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+        </div>
       </section>
 
       <section className="card module2-card notifications-page__end-card">
@@ -320,16 +359,143 @@ const Notifications = () => {
         )}
       </section>
 
-      {reviewCount === 0 ? (
+      <section className="card module2-card notifications-page__wallet-card">
+        <h2 className="notifications-page__section-title">Credits &amp; gifts</h2>
+        <p className="notifications-page__section-subtitle">Purchases and redemptions while you are signed in.</p>
+        {walletItems.length === 0 ? (
+          <p className="module2-muted">No wallet alerts in this session yet.</p>
+        ) : (
+          <ul className="notifications-page__list">
+            {walletItems.map((n) => (
+              <li key={n.localId} className="notifications-page__item">
+                <button
+                  type="button"
+                  className="notifications-page__item-main"
+                  onClick={() => {
+                    dismiss(n.localId);
+                    navigate(n.link || "/credits");
+                  }}
+                >
+                  <span className="notifications-page__item-type">Wallet</span>
+                  <span className="notifications-page__item-line">
+                    <strong>{n.title}</strong>
+                  </span>
+                  {n.message ? (
+                    <span className="notifications-page__item-comment">{n.message}</span>
+                  ) : null}
+                  <span className="notifications-page__item-cta">Open linked page →</span>
+                </button>
+                <button
+                  type="button"
+                  className="notifications-page__item-dismiss"
+                  onClick={() => dismiss(n.localId)}
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card module2-card notifications-page__wallet-card">
+        <h2 className="notifications-page__section-title">Your complaints</h2>
+        <p className="notifications-page__section-subtitle">
+          When an admin updates your ticket status or pipeline stage, a short alert appears here (stay online with the
+          same account).
+        </p>
+        {complaintItems.length === 0 ? (
+          <p className="module2-muted">No complaint updates in this session yet.</p>
+        ) : (
+          <ul className="notifications-page__list">
+            {complaintItems.map((n) => (
+              <li key={n.localId} className="notifications-page__item">
+                <button
+                  type="button"
+                  className="notifications-page__item-main"
+                  onClick={() => {
+                    dismiss(n.localId);
+                    navigate(n.link || "/complaints");
+                  }}
+                >
+                  <span className="notifications-page__item-type">Complaint</span>
+                  <span className="notifications-page__item-line">
+                    <strong>{n.title}</strong>
+                  </span>
+                  {n.message ? (
+                    <span className="notifications-page__item-comment">{n.message}</span>
+                  ) : null}
+                  <span className="notifications-page__item-cta">Open ticket →</span>
+                </button>
+                <button
+                  type="button"
+                  className="notifications-page__item-dismiss"
+                  onClick={() => dismiss(n.localId)}
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {user?.role === "admin" ? (
+        <section className="card module2-card notifications-page__wallet-card">
+          <h2 className="notifications-page__section-title">Platform credit sales</h2>
+          <p className="notifications-page__section-subtitle">Recorded BDT from credit pack checkouts.</p>
+          {adminIncomeItems.length === 0 ? (
+            <p className="module2-muted">No sales alerts in this session yet.</p>
+          ) : (
+            <ul className="notifications-page__list">
+              {adminIncomeItems.map((n) => (
+                <li key={n.localId} className="notifications-page__item">
+                  <button
+                    type="button"
+                    className="notifications-page__item-main"
+                    onClick={() => {
+                      dismiss(n.localId);
+                      navigate(n.link || "/admin");
+                    }}
+                  >
+                    <span className="notifications-page__item-type">Revenue</span>
+                    <span className="notifications-page__item-line">
+                      <strong>{n.title}</strong>
+                    </span>
+                    {n.message ? (
+                      <span className="notifications-page__item-comment">{n.message}</span>
+                    ) : null}
+                    <span className="notifications-page__item-cta">Admin dashboard →</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="notifications-page__item-dismiss"
+                    onClick={() => dismiss(n.localId)}
+                    aria-label="Dismiss"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {reviewItems.length === 0 ? (
         <section className="card module2-card notifications-page__empty-card">
           <p className="module2-muted notifications-page__empty-text">
-            You&apos;re caught up. When someone rates you while you&apos;re online, it will show here. Other kinds of
-            alerts will be added here as the app grows.
+            No new ratings in this session. When someone rates you while you&apos;re online, it will show in the list
+            below.
           </p>
         </section>
-      ) : (
+      ) : null}
+
+      {reviewItems.length > 0 ? (
         <ul className="notifications-page__list">
-          {items.map((n) => (
+          {reviewItems.map((n) => (
             <li key={n.localId} className="notifications-page__item">
               <button
                 type="button"
@@ -370,7 +536,7 @@ const Notifications = () => {
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
 
       {selectedOffer && (
         <>

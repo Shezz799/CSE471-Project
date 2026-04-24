@@ -3,6 +3,15 @@ import StarAverage from "./StarAverage";
 
 const STAR_ORDER = [5, 4, 3, 2, 1];
 
+const TOPIC_AVERAGE_ITEMS = [
+  { key: "topicKnowledge", label: "Topic" },
+  { key: "teachingClarity", label: "Clarity" },
+  { key: "communication", label: "Communication" },
+  { key: "patience", label: "Patience" },
+  { key: "professionalism", label: "Professionalism" },
+  { key: "helpfulness", label: "Helpfulness" },
+];
+
 const ProfileRatingSection = ({
   stats,
   reviews,
@@ -44,6 +53,20 @@ const ProfileRatingSection = ({
               <p className="profile-rating-summary__helps">
                 Offered help on {helpsOfferedCount} request{helpsOfferedCount === 1 ? "" : "s"}
               </p>
+            )}
+            {stats?.topicAverages && (
+              <div className="profile-rating-topic-chips" aria-label="Average scores by topic">
+                {TOPIC_AVERAGE_ITEMS.map(({ key, label }) => {
+                  const v = stats.topicAverages[key];
+                  if (v == null || Number.isNaN(Number(v))) return null;
+                  return (
+                    <span key={key} className="profile-rating-topic-chip">
+                      <span className="profile-rating-topic-chip__label">{label}</span>
+                      <span className="profile-rating-topic-chip__val">{Number(v).toFixed(2)}</span>
+                    </span>
+                  );
+                })}
+              </div>
             )}
           </div>
           <div className="profile-rating-summary__bars" aria-label="Rating breakdown">
@@ -96,12 +119,14 @@ const ProfileRatingSection = ({
             <p className="module2-muted">No reviews in this filter.</p>
           ) : (
             <ul className="profile-reviews-list">
-              {reviews.map((r) => (
+              {reviews.map((r) => {
+                const starFill = Math.min(5, Math.max(0, Math.round(Number(r.rating) || 0)));
+                return (
                 <li key={r._id} className="profile-review-card">
                   <div className="profile-review-card__head">
                     <span className="profile-review-card__stars" aria-label={`${r.rating} out of 5`}>
-                      {"★".repeat(r.rating)}
-                      <span className="profile-review-card__stars-off">{"★".repeat(5 - r.rating)}</span>
+                      {"★".repeat(starFill)}
+                      <span className="profile-review-card__stars-off">{"★".repeat(5 - starFill)}</span>
                     </span>
                     <span className="profile-review-card__by">
                       {r.reviewer?.name || "Student"}
@@ -124,8 +149,23 @@ const ProfileRatingSection = ({
                     )}
                   </div>
                   {r.comment ? <p className="profile-review-card__text">{r.comment}</p> : null}
+                  {r.criteria ? (
+                    <div className="profile-rating-topic-chips profile-rating-topic-chips--compact" aria-label="Scores for this review">
+                      {TOPIC_AVERAGE_ITEMS.map(({ key, label }) => {
+                        const raw = r.criteria[key];
+                        if (raw == null) return null;
+                        return (
+                          <span key={key} className="profile-rating-topic-chip">
+                            <span className="profile-rating-topic-chip__label">{label}</span>
+                            <span className="profile-rating-topic-chip__val">{raw}/5</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </li>
-              ))}
+              );
+              })}
             </ul>
           )}
         </>

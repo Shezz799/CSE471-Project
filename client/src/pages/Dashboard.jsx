@@ -265,6 +265,15 @@ const Dashboard = () => {
 
             <button
               type="button"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/credits") ? "is-active" : ""}`}
+              onClick={() => navigate("/credits")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>৳</span>
+              <span className="skill-dashboard__sidebar-label">Credits & gifts</span>
+            </button>
+
+            <button
+              type="button"
               className={`skill-dashboard__sidebar-link ${isRouteActive("/complaints") ? "is-active" : ""}`}
               onClick={() => navigate("/complaints")}
             >

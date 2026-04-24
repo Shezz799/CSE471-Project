@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getComplaint, updateComplaint } from "../../api/complaints";
+import { getComplaint, resolveComplaint, updateComplaint } from "../../api/complaints";
 import { banUser, suspendUser } from "../../api/admin";
 
 const STATUS_OPTIONS = ["open", "in_progress", "resolved", "dismissed"];
 const PIPELINE_OPTIONS = ["received", "under_review", "result"];
 
 const formatStatus = (s) => (s ? s.replace(/_/g, " ").replace(/\b\w/g, (x) => x.toUpperCase()) : "");
+
+const OUTCOME_LABELS = {
+  complainant_upheld: "Complainant upheld",
+  subject_upheld: "Subject user upheld",
+  partial: "Partial / mixed outcome",
+};
 
 const AdminComplaintDetail = () => {
   const { id } = useParams();
@@ -20,6 +26,9 @@ const AdminComplaintDetail = () => {
   const [saving, setSaving] = useState(false);
   const [modReason, setModReason] = useState("");
   const [msg, setMsg] = useState("");
+  const [disputeOutcome, setDisputeOutcome] = useState("partial");
+  const [resolutionSummary, setResolutionSummary] = useState("");
+  const [compensationCredits, setCompensationCredits] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +54,14 @@ const AdminComplaintDetail = () => {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!c) return;
+    setResolutionSummary(c.resolutionSummary || "");
+    setDisputeOutcome(
+      ["complainant_upheld", "subject_upheld", "partial"].includes(c.disputeOutcome) ? c.disputeOutcome : "partial"
+    );
+  }, [c]);
+
   const save = async () => {
     setSaving(true);
     setMsg("");
@@ -62,6 +79,29 @@ const AdminComplaintDetail = () => {
       setC(data.data);
     } catch (e) {
       setMsg(e.response?.data?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const finalizeResolution = async () => {
+    setSaving(true);
+    setMsg("");
+    try {
+      await resolveComplaint(id, {
+        disputeOutcome,
+        resolutionSummary,
+        compensationCredits: Number(compensationCredits) || 0,
+        complainantMessage,
+        notifyComplainant,
+      });
+      setMsg("Dispute resolved.");
+      const { data } = await getComplaint(id);
+      setC(data.data);
+      setStatus(data.data.status || "resolved");
+      setPipelineStage(data.data.pipelineStage || "result");
+    } catch (e) {
+      setMsg(e.response?.data?.message || "Failed to resolve dispute");
     } finally {
       setSaving(false);
     }
@@ -124,7 +164,49 @@ const AdminComplaintDetail = () => {
             Post: {c.post.subject} / {c.post.topic}
           </p>
         )}
+        {Array.isArray(c.evidenceLinks) && c.evidenceLinks.length > 0 ? (
+          <div style={{ marginTop: "0.75rem" }}>
+            <p className="module2-muted" style={{ marginBottom: "0.35rem" }}>
+              Evidence from complainant
+            </p>
+            <ul className="module2-list">
+              {c.evidenceLinks.map((url) => (
+                <li key={url} className="module2-list-item">
+                  <a href={url} target="_blank" rel="noopener noreferrer">
+                    {url.length > 72 ? `${url.slice(0, 72)}…` : url}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
+
+      {c.appealedAt && c.appealMessage ? (
+        <div className="card module2-card" style={{ marginBottom: "1rem", borderColor: "#c2410c" }}>
+          <h2 className="module2-card__title">Complainant appeal</h2>
+          <p className="module2-muted">Submitted {new Date(c.appealedAt).toLocaleString()}</p>
+          <p className="module2-review-text">{c.appealMessage}</p>
+        </div>
+      ) : null}
+
+      {(c.status === "resolved" || c.status === "dismissed") && (c.resolutionSummary || c.disputeOutcome) ? (
+        <div className="card module2-card" style={{ marginBottom: "1rem" }}>
+          <h2 className="module2-card__title">Last recorded decision</h2>
+          {c.disputeOutcome ? (
+            <p className="module2-muted">
+              Outcome: <strong>{OUTCOME_LABELS[c.disputeOutcome] || formatStatus(c.disputeOutcome)}</strong>
+            </p>
+          ) : null}
+          {c.resolutionSummary ? <p className="module2-review-text">{c.resolutionSummary}</p> : null}
+          {c.resolvedBy?.name ? (
+            <p className="module2-muted" style={{ marginTop: "0.5rem" }}>
+              Closed by {c.resolvedBy.name}
+              {c.resolvedAt ? ` · ${new Date(c.resolvedAt).toLocaleString()}` : ""}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="card module2-card module2-form">
         <h2 className="module2-card__title">Admin workflow</h2>
@@ -151,6 +233,10 @@ const AdminComplaintDetail = () => {
               </option>
             ))}
           </select>
+          <p className="module2-muted" style={{ marginTop: "0.35rem", fontSize: "0.82rem" }}>
+            Saving status or pipeline sends an <strong>in-app notification</strong> to the complainant if they are
+            online. Use “Email the complainant” for email as well.
+          </p>
         </div>
         <div className="field">
           <label className="label">Internal admin notes</label>
@@ -182,6 +268,54 @@ const AdminComplaintDetail = () => {
         <button type="button" className="button" disabled={saving} onClick={save}>
           {saving ? "Saving…" : "Save"}
         </button>
+        <hr style={{ opacity: 0.2 }} />
+        {c.status !== "resolved" && c.status !== "dismissed" ? (
+          <>
+            <h3 className="module2-card__title" style={{ fontSize: "1.05rem" }}>
+              Resolve dispute
+            </h3>
+            <p className="module2-muted" style={{ marginBottom: "0.75rem" }}>
+              Requires a written summary and outcome. Optional credit compensation is logged on the complainant wallet.
+            </p>
+            <div className="field">
+              <label className="label">Outcome</label>
+              <select className="input" value={disputeOutcome} onChange={(e) => setDisputeOutcome(e.target.value)}>
+                <option value="complainant_upheld">Complainant upheld</option>
+                <option value="subject_upheld">Subject user upheld</option>
+                <option value="partial">Partial / mixed outcome</option>
+              </select>
+            </div>
+            <div className="field">
+              <label className="label">Resolution summary (required)</label>
+              <textarea
+                className="input"
+                rows={3}
+                value={resolutionSummary}
+                onChange={(e) => setResolutionSummary(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label className="label">Compensation credits to complainant (optional)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={200}
+                value={compensationCredits}
+                onChange={(e) => setCompensationCredits(e.target.value)}
+              />
+            </div>
+            <button type="button" className="button" disabled={saving} onClick={finalizeResolution}>
+              {saving ? "Resolving…" : "Finalize dispute resolution"}
+            </button>
+          </>
+        ) : (
+          <p className="module2-muted">
+            This ticket is marked <strong>{formatStatus(c.status)}</strong>. To change the outcome, set status back
+            to <em>In progress</em> above and save, or wait for a complainant <strong>appeal</strong> (reopens
+            automatically).
+          </p>
+        )}
       </div>
 
       {subjectId && (

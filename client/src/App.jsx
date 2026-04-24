@@ -6,11 +6,15 @@ import CreateAccount from "./pages/CreateAccount";
 import Messages from "./pages/Messages";
 import RateMentor from "./pages/RateMentor";
 import Complaints from "./pages/Complaints";
+import ComplaintTicketDetail from "./pages/ComplaintTicketDetail";
 import UserProfile from "./pages/UserProfile";
 import Notifications from "./pages/Notifications";
 import ReviewsAll from "./pages/ReviewsAll";
 import Appeal from "./pages/Appeal";
 import Analytics from "./pages/Analytics";
+import CreditsCenter from "./pages/CreditsCenter";
+import BkashDemoCheckout from "./pages/BkashDemoCheckout";
+import GiftAccessPage from "./pages/GiftAccessPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminComplaints from "./pages/admin/AdminComplaints";
 import AdminComplaintDetail from "./pages/admin/AdminComplaintDetail";
@@ -44,6 +48,30 @@ const App = () => {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/credits"
+        element={
+          <ProtectedRoute>
+            <CreditsCenter />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/credits/bkash-demo"
+        element={
+          <ProtectedRoute>
+            <BkashDemoCheckout />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/access/:productKey"
+        element={
+          <ProtectedRoute>
+            <GiftAccessPage />
           </ProtectedRoute>
         }
       />
@@ -148,6 +176,14 @@ const App = () => {
         element={
           <ProtectedRoute>
             <RateMentor />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/complaints/ticket/:id"
+        element={
+          <ProtectedRoute>
+            <ComplaintTicketDetail />
           </ProtectedRoute>
         }
       />

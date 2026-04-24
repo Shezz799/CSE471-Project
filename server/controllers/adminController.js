@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Complaint = require("../models/Complaint");
 const Review = require("../models/Review");
+const PlatformIncome = require("../models/PlatformIncome");
 const { sendMail } = require("../utils/mail");
 const { getFullReviewStatsForUser } = require("../services/reviewStats");
 
@@ -46,15 +47,40 @@ async function sendModerationEmail(userId, { subject, intro }) {
 
 exports.getStats = async (req, res) => {
   try {
-    const [openComplaints, suspendedUsers, bannedUsers, appealsPending] = await Promise.all([
+    const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [
+      openComplaints,
+      suspendedUsers,
+      bannedUsers,
+      appealsPending,
+      revenueAgg,
+      revenue30Agg,
+      creditPurchaseCount,
+    ] = await Promise.all([
       Complaint.countDocuments({ status: { $in: ["open", "in_progress"] } }),
       User.countDocuments({ accountStatus: "suspended" }),
       User.countDocuments({ accountStatus: "banned" }),
       User.countDocuments({ appealPending: true }),
+      PlatformIncome.aggregate([{ $group: { _id: null, total: { $sum: "$amountBdt" } } }]),
+      PlatformIncome.aggregate([
+        { $match: { createdAt: { $gte: since30d } } },
+        { $group: { _id: null, total: { $sum: "$amountBdt" } } },
+      ]),
+      PlatformIncome.countDocuments(),
     ]);
+    const platformCreditRevenueBdt = Math.round((revenueAgg[0]?.total || 0) * 100) / 100;
+    const platformCreditRevenueLast30dBdt = Math.round((revenue30Agg[0]?.total || 0) * 100) / 100;
     return res.json({
       success: true,
-      data: { openComplaints, suspendedUsers, bannedUsers, appealsPending },
+      data: {
+        openComplaints,
+        suspendedUsers,
+        bannedUsers,
+        appealsPending,
+        platformCreditRevenueBdt,
+        platformCreditRevenueLast30dBdt,
+        platformCreditPurchaseCount: creditPurchaseCount,
+      },
     });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });

@@ -63,6 +63,18 @@ const AdminDashboard = () => {
             <strong>{stats.appealsPending}</strong>
             <span>Appeal requests pending</span>
           </li>
+          <li>
+            <strong>৳{Number(stats.platformCreditRevenueBdt ?? 0).toLocaleString()}</strong>
+            <span>All-time credit sales (BDT)</span>
+          </li>
+          <li>
+            <strong>৳{Number(stats.platformCreditRevenueLast30dBdt ?? 0).toLocaleString()}</strong>
+            <span>Credit sales last 30 days</span>
+          </li>
+          <li>
+            <strong>{stats.platformCreditPurchaseCount ?? 0}</strong>
+            <span>Completed credit checkouts</span>
+          </li>
         </ul>
       )}
 

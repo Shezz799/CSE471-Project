@@ -7,20 +7,49 @@ const { emitToUser } = require("../socket/socketServer");
 
 const normalizeRating = (r) => {
   const n = Number(r);
-  if (!Number.isInteger(n) || n < 1 || n > 5) return null;
+  if (!Number.isFinite(n) || n < 1 || n > 5) return null;
   return n;
+};
+
+const RATING_CRITERIA_KEYS = [
+  "topicKnowledge",
+  "teachingClarity",
+  "communication",
+  "patience",
+  "professionalism",
+  "helpfulness",
+];
+
+const normalizeCriteriaRatings = (criteriaInput, fallbackRating = null) => {
+  const source = criteriaInput && typeof criteriaInput === "object" ? criteriaInput : {};
+  const normalized = {};
+  for (const key of RATING_CRITERIA_KEYS) {
+    const raw = source[key] != null ? source[key] : fallbackRating;
+    const next = normalizeRating(raw);
+    if (next == null) return null;
+    normalized[key] = next;
+  }
+  return normalized;
+};
+
+const averageCriteria = (criteria) => {
+  const values = RATING_CRITERIA_KEYS.map((key) => Number(criteria[key]));
+  const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+  return Math.round(avg * 100) / 100;
 };
 
 exports.createReview = async (req, res) => {
   try {
-    const { revieweeId, postId, rating, comment } = req.body;
-    const rid = normalizeRating(rating);
-    if (rid == null) {
+    const { revieweeId, postId, rating, comment, criteria } = req.body;
+    const fallbackRating = normalizeRating(rating);
+    const normalizedCriteria = normalizeCriteriaRatings(criteria, fallbackRating);
+    if (normalizedCriteria == null) {
       return res.status(400).json({
         success: false,
-        message: "Rating must be a whole number from 1 to 5",
+        message: "All rating topics must be numbers from 1 to 5",
       });
     }
+    const rid = averageCriteria(normalizedCriteria);
     if (!revieweeId || !mongoose.isValidObjectId(revieweeId)) {
       return res.status(400).json({
         success: false,
@@ -75,6 +104,7 @@ exports.createReview = async (req, res) => {
       reviewee: revieweeId,
       post: postRef,
       rating: rid,
+      criteria: normalizedCriteria,
       comment: commentStr,
     });
 
@@ -88,6 +118,7 @@ exports.createReview = async (req, res) => {
       emitToUser(String(revieweeId), "review:received", {
         reviewId: String(doc._id),
         rating: rid,
+        criteria: normalizedCriteria,
         comment: commentStr || "",
         reviewerName: populated.reviewer?.name || "Someone",
         post: populated.post
