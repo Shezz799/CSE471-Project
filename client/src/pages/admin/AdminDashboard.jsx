@@ -27,6 +27,11 @@ const AdminDashboard = () => {
     { to: "/admin/suspended", title: "Suspended users", desc: "Lift suspension or review appeals" },
     { to: "/admin/banned", title: "Banned users", desc: "Unban or release email for new signup" },
     { to: "/admin/low-ratings", title: "Low mentor ratings", desc: "Users below 2★ average — send coaching email" },
+    {
+      to: "/admin/course-promotions",
+      title: "Course promotions",
+      desc: "Publish external courses — notify all users with landing pages and checkout",
+    },
   ];
 
   return (

@@ -37,6 +37,7 @@ app.use("/api/complaints", require("./routes/complaintRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/moderation", require("./routes/moderationRoutes"));
 app.use("/api/credits", require("./routes/creditStoreRoutes"));
+app.use("/api/course-promotions", require("./routes/coursePromotionRoutes"));
 
 const PORT = process.env.PORT || 5000;
 

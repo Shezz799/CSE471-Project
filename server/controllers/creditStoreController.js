@@ -419,6 +419,11 @@ exports.bkashCallbackGet = async (req, res) => {
 
     const order = await CreditPurchaseOrder.findOne({ bkashPaymentID: paymentID }).populate("user");
     if (!order) {
+      const { tryProcessCourseBkashCallback } = require("./coursePromotionController");
+      const handledCourse = await tryProcessCourseBkashCallback({ paymentID, status, redirect });
+      if (handledCourse) {
+        return;
+      }
       return redirect("/credits?purchase=error&reason=unknown_order");
     }
 

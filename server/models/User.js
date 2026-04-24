@@ -103,6 +103,24 @@ const userSchema = new mongoose.Schema({
     default: 5,
     min: 0,
   },
+  /** Consecutive UTC calendar days with ≥1 completed mentorship session as requester */
+  mentorshipStreakCount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  /** YYYY-MM-DD (UTC) of last day that counted toward streak */
+  mentorshipStreakActivityDay: {
+    type: String,
+    default: "",
+    maxlength: 12,
+  },
+  /** YYYY-MM-DD (UTC) when we last granted the +2 streak bonus (one bonus per day max) */
+  mentorshipStreakBonusDay: {
+    type: String,
+    default: "",
+    maxlength: 12,
+  },
 }, {
   timestamps: true
 });

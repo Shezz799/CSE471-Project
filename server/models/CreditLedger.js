@@ -4,6 +4,8 @@ const CREDIT_LEDGER_TYPES = [
   "purchase",
   "gift_redemption",
   "dispute_credit_adjustment",
+  "mentorship_streak_bonus",
+  "course_promotion_purchase",
 ];
 
 const creditLedgerSchema = new mongoose.Schema(

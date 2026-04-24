@@ -6,10 +6,16 @@ import { connectChatSocket } from "../socket/chatSocket";
 import { getMyOfferNotifications, rejectHelpOffer } from "../api/posts";
 import { fetchPendingEndSessionRequests, respondEndSession, startSession } from "../api/session";
 
+const promotionIdFromNotification = (n) => {
+  if (n?.promotionId) return String(n.promotionId);
+  const m = typeof n?.link === "string" ? n.link.match(/\/courses\/promo\/([^/?#]+)/) : null;
+  return m ? m[1] : "";
+};
+
 const Notifications = () => {
   const navigate = useNavigate();
   const { user, token, setUserProfile } = useAuth();
-  const { items, dismiss, clearAll, markAllRead } = useReviewNotifications();
+  const { items, dismiss, clearAll, markAllRead, markPromotionReadById, refreshPromotionInbox } = useReviewNotifications();
   const [offerItems, setOfferItems] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
   const [endRequestItems, setEndRequestItems] = useState([]);
@@ -169,6 +175,10 @@ const Notifications = () => {
   }, [markAllRead]);
 
   useEffect(() => {
+    void refreshPromotionInbox();
+  }, [refreshPromotionInbox]);
+
+  useEffect(() => {
     loadOfferNotifications();
     loadPendingEndRequests();
   }, [loadOfferNotifications, loadPendingEndRequests]);
@@ -199,9 +209,10 @@ const Notifications = () => {
   }, [token, loadOfferNotifications, loadPendingEndRequests]);
 
   const reviewItems = useMemo(
-    () => items.filter((i) => !i.notificationKind || i.notificationKind === "review"),
+    () => items.filter((i) => i.notificationKind === "review" || (i.reviewId && !i.notificationKind)),
     [items]
   );
+  const promotionItems = useMemo(() => items.filter((i) => i.notificationKind === "promotion"), [items]);
   const walletItems = useMemo(() => items.filter((i) => i.notificationKind === "wallet"), [items]);
   const complaintItems = useMemo(() => items.filter((i) => i.notificationKind === "complaint"), [items]);
   const adminIncomeItems = useMemo(() => items.filter((i) => i.notificationKind === "admin_income"), [items]);
@@ -213,9 +224,10 @@ const Notifications = () => {
         <div>
           <h1 className="module2-page__title">Notifications</h1>
           <p className="module2-page__subtitle">
-            <strong>Reviews</strong>, <strong>complaints</strong>, <strong>credits &amp; gifts</strong>, and (for admins){" "}
-            <strong>platform sales</strong> show here. Open <Link to="/reviews">Ratings &amp; reviews</Link> for your full
-            received history.
+            From the dashboard sidebar, open <strong>Notifications</strong> (bell icon). Course promotions
+            from admins are listed first below. You also get a short <strong>toast popup</strong> at the top of the
+            screen when a new course is published while you are logged in. Browse all listings anytime under{" "}
+            <Link to="/courses">Promoted courses</Link> on the dashboard.
           </p>
         </div>
         <div className="notifications-page__header-actions">
@@ -229,6 +241,58 @@ const Notifications = () => {
           </button>
         </div>
       </header>
+
+      <section className="card module2-card notifications-page__wallet-card notifications-page__promotions-first">
+        <h2 className="notifications-page__section-title">Course promotions</h2>
+        <p className="notifications-page__section-subtitle">
+          New courses from admins appear here first. If you were online when one was published, you may also see a
+          toast at the top of the screen. Open a row to go to the course page.
+        </p>
+        {promotionItems.length === 0 ? (
+          <p className="module2-muted">No course promotions yet. When an admin publishes one, it will show here.</p>
+        ) : (
+          <ul className="notifications-page__list">
+            {promotionItems.map((n) => (
+              <li
+                key={n.localId}
+                className={`notifications-page__item${n.read ? " notifications-page__item--read" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="notifications-page__item-main"
+                  onClick={() => {
+                    const pid = promotionIdFromNotification(n);
+                    if (pid) void markPromotionReadById(pid);
+                    dismiss(n.localId);
+                    navigate(n.link || "/notifications");
+                  }}
+                >
+                  <span className="notifications-page__item-type">Course</span>
+                  <span className="notifications-page__item-line">
+                    <strong>{n.title}</strong>
+                  </span>
+                  {n.message ? (
+                    <span className="notifications-page__item-comment">{n.message}</span>
+                  ) : null}
+                  <span className="notifications-page__item-cta">View course page →</span>
+                </button>
+                <button
+                  type="button"
+                  className="notifications-page__item-dismiss"
+                  onClick={() => {
+                    const pid = promotionIdFromNotification(n);
+                    if (pid) void markPromotionReadById(pid);
+                    dismiss(n.localId);
+                  }}
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="card module2-card notifications-page__offer-card">
         <button

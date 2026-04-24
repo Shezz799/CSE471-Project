@@ -22,6 +22,10 @@ import AdminUserSearch from "./pages/admin/AdminUserSearch";
 import AdminSuspended from "./pages/admin/AdminSuspended";
 import AdminBanned from "./pages/admin/AdminBanned";
 import AdminLowRatings from "./pages/admin/AdminLowRatings";
+import AdminCoursePromotions from "./pages/admin/AdminCoursePromotions";
+import CourseCatalogPage from "./pages/CourseCatalogPage";
+import CoursePromoLanding from "./pages/CoursePromoLanding";
+import CourseBkashDemoCheckout from "./pages/CourseBkashDemoCheckout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
 import OfferNotifications from "./components/OfferNotifications";
@@ -64,6 +68,23 @@ const App = () => {
         element={
           <ProtectedRoute>
             <BkashDemoCheckout />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/courses/promo/bkash-demo"
+        element={
+          <ProtectedRoute>
+            <CourseBkashDemoCheckout />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/courses/promo/:id" element={<CoursePromoLanding />} />
+      <Route
+        path="/courses"
+        element={
+          <ProtectedRoute>
+            <CourseCatalogPage />
           </ProtectedRoute>
         }
       />
@@ -128,6 +149,14 @@ const App = () => {
         element={
           <AdminRoute>
             <AdminLowRatings />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/course-promotions"
+        element={
+          <AdminRoute>
+            <AdminCoursePromotions />
           </AdminRoute>
         }
       />
