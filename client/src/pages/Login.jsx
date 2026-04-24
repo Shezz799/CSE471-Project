@@ -37,7 +37,11 @@ const Login = () => {
           }
         } catch (err) {
           const code = err.response?.data?.code;
-          const base = err.response?.data?.message || "Login failed";
+          const base =
+            err.response?.data?.message ||
+            (err.response?.status ? `Request failed (${err.response.status})` : "") ||
+            err.message ||
+            "Login failed";
           if (code === "ACCOUNT_SUSPENDED" || code === "ACCOUNT_BANNED") {
             setError(
               `${base} If you received an email with a review link, you can open it to request a review.`

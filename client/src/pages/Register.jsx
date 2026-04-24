@@ -35,7 +35,12 @@ const Register = () => {
           setSuccess("Account created successfully");
           navigate("/create-account", { replace: true });
         } catch (err) {
-          setError(err.response?.data?.message || "Registration failed");
+          const message =
+            err.response?.data?.message ||
+            (err.response?.status ? `Request failed (${err.response.status})` : "") ||
+            err.message ||
+            "Registration failed";
+          setError(message);
         }
       },
     });
