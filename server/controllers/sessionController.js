@@ -9,6 +9,7 @@ const {
   normalizeUserCreditFields,
 } = require("./creditController");
 const { emitToUser, joinUserSocketsToChatRoom } = require("../socket/socketServer");
+const { applyMentorshipStreakOnSessionCompleted } = require("../services/mentorshipStreakService");
 
 const ACTIVE_STATUSES = ["pending", "active", "ending"];
 
@@ -371,6 +372,12 @@ const respondEndSession = async (req, res) => {
     session.endedAt = new Date();
     await session.save();
     await ensurePostState("closed");
+
+    try {
+      await applyMentorshipStreakOnSessionCompleted(requesterId);
+    } catch (streakErr) {
+      console.error("mentorship streak update failed:", streakErr?.message || streakErr);
+    }
 
     const completedPayload = {
       sessionId: String(session._id),

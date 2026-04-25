@@ -158,6 +158,39 @@ const OfferNotifications = () => {
       }
     };
 
+    const onWalletUpdate = (payload) => {
+      const t = String(payload?.title || "").toLowerCase();
+      const m = String(payload?.message || "").toLowerCase();
+      if (t.includes("streak") || m.includes("streak")) {
+        toast.success(payload?.message || payload?.title || "Wallet updated", { duration: 6500 });
+      }
+    };
+
+    const onPromotionNew = (payload) => {
+      const link = payload?.link || "/notifications";
+      const title = payload?.title || "New course";
+      const message = payload?.message || "";
+      toast.custom(
+        (toastObj) => (
+          <button
+            type="button"
+            className="offer-notification-toast"
+            onClick={() => {
+              navigate(link);
+              toast.dismiss(toastObj.id);
+            }}
+          >
+            <strong>{title}</strong>
+            {message ? (
+              <span style={{ display: "block", marginTop: 6, fontWeight: 400 }}>{message}</span>
+            ) : null}
+            <span style={{ display: "block", marginTop: 6, fontSize: 12, opacity: 0.9 }}>Tap to view →</span>
+          </button>
+        ),
+        { duration: 10000 }
+      );
+    };
+
     const onSessionEnded = async (payload) => {
       const requesterId = String(payload?.requesterId || "");
       const helperId = String(payload?.helperId || "");
@@ -216,6 +249,8 @@ const OfferNotifications = () => {
     socket.on("session_invite", onSessionInvite);
     socket.on("session_started", onSessionStarted);
     socket.on("session_ended", onSessionEnded);
+    socket.on("wallet:update", onWalletUpdate);
+    socket.on("promotion:new", onPromotionNew);
 
     return () => {
       socket.off("offer_notification", onOfferNotification);
@@ -223,6 +258,8 @@ const OfferNotifications = () => {
       socket.off("session_invite", onSessionInvite);
       socket.off("session_started", onSessionStarted);
       socket.off("session_ended", onSessionEnded);
+      socket.off("wallet:update", onWalletUpdate);
+      socket.off("promotion:new", onPromotionNew);
     };
   }, [token, currentUserId, navigate, user]);
 

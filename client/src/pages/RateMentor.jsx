@@ -10,6 +10,24 @@ import {
 } from "../api/reviews";
 
 const RateMentor = () => {
+  const ratingTopics = [
+    { key: "topicKnowledge", label: "Topic knowledge" },
+    { key: "teachingClarity", label: "Teaching clarity" },
+    { key: "communication", label: "Communication" },
+    { key: "patience", label: "Patience" },
+    { key: "professionalism", label: "Professionalism" },
+    { key: "helpfulness", label: "Overall helpfulness" },
+  ];
+
+  const defaultCriteria = {
+    topicKnowledge: 5,
+    teachingClarity: 5,
+    communication: 5,
+    patience: 5,
+    professionalism: 5,
+    helpfulness: 5,
+  };
+
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -20,7 +38,7 @@ const RateMentor = () => {
   const [postId, setPostId] = useState("");
   const [mentorId, setMentorId] = useState("");
 
-  const [rating, setRating] = useState(5);
+  const [criteria, setCriteria] = useState(defaultCriteria);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formMessage, setFormMessage] = useState({ type: "", text: "" });
@@ -28,6 +46,17 @@ const RateMentor = () => {
   const [given, setGiven] = useState([]);
   const [received, setReceived] = useState([]);
   const [statsPreview, setStatsPreview] = useState(null);
+
+  const rating = Math.round(
+    ((criteria.topicKnowledge +
+      criteria.teachingClarity +
+      criteria.communication +
+      criteria.patience +
+      criteria.professionalism +
+      criteria.helpfulness) /
+      6) *
+      100
+  ) / 100;
 
   const myPosts = useMemo(
     () => posts.filter((p) => (p.author?._id || p.author) === user?.id),
@@ -167,8 +196,9 @@ const RateMentor = () => {
       });
       return;
     }
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      setFormMessage({ type: "error", text: "Pick a star rating from 1 to 5." });
+    const allCriteriaValid = Object.values(criteria).every((v) => Number.isInteger(v) && v >= 1 && v <= 5);
+    if (!allCriteriaValid) {
+      setFormMessage({ type: "error", text: "All rating topics must be between 1 and 5." });
       return;
     }
     setSubmitting(true);
@@ -176,12 +206,12 @@ const RateMentor = () => {
       await createReview({
         revieweeId: mentorId,
         postId,
-        rating,
+        criteria,
         comment: comment.trim(),
       });
       setFormMessage({ type: "ok", text: "Thank you — your review was saved." });
       setComment("");
-      setRating(5);
+      setCriteria(defaultCriteria);
       setMentorId("");
       const [g, r] = await Promise.all([getMyReviewsGiven(), getMyReviewsReceived()]);
       setGiven(g.data.data || []);
@@ -295,21 +325,29 @@ const RateMentor = () => {
             )}
 
             <div className="field">
-              <span className="label">Rating</span>
-              <div className="module2-stars" role="group" aria-label="Star rating">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    className={`module2-star ${n <= rating ? "module2-star--on" : ""}`}
-                    onClick={() => setRating(n)}
-                    aria-pressed={n <= rating}
-                  >
-                    ★
-                  </button>
-                ))}
-                <span className="module2-star-label">{rating} / 5</span>
-              </div>
+              <span className="label">Rate this mentor by topics</span>
+              {ratingTopics.map((topic) => (
+                <div key={topic.key} className="module2-stars" role="group" aria-label={topic.label}>
+                  <span className="module2-hint" style={{ minWidth: "11rem", display: "inline-block" }}>
+                    {topic.label}
+                  </span>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={`module2-star ${n <= criteria[topic.key] ? "module2-star--on" : ""}`}
+                      onClick={() => setCriteria((prev) => ({ ...prev, [topic.key]: n }))}
+                      aria-pressed={n <= criteria[topic.key]}
+                    >
+                      ★
+                    </button>
+                  ))}
+                  <span className="module2-star-label">{criteria[topic.key]} / 5</span>
+                </div>
+              ))}
+              <p className="module2-stats-preview">
+                Final average rating for this review: <strong>{rating} / 5</strong>
+              </p>
             </div>
 
             <div className="field">
@@ -346,7 +384,7 @@ const RateMentor = () => {
               <ul className="module2-list">
                 {given.slice(0, 1).map((r) => (
                   <li key={r._id} className="module2-list-item">
-                    <strong>{r.rating}★</strong> to {r.reviewee?.name || "Mentor"}
+                    <strong>{Number(r.rating).toFixed(2)}★</strong> to {r.reviewee?.name || "Mentor"}
                     {r.post && (
                       <span className="module2-muted">
                         {" "}
@@ -378,7 +416,7 @@ const RateMentor = () => {
                 <ul className="module2-list">
                   {received.slice(0, 1).map((r) => (
                     <li key={r._id} className="module2-list-item">
-                      <strong>{r.rating}★</strong> from {r.reviewer?.name || "Student"}
+                      <strong>{Number(r.rating).toFixed(2)}★</strong> from {r.reviewer?.name || "Student"}
                       {r.post && (
                         <span className="module2-muted">
                           {" "}

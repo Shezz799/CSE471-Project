@@ -69,6 +69,49 @@ const complaintSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    resolvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    resolutionSummary: {
+      type: String,
+      trim: true,
+      maxlength: 2000,
+      default: "",
+    },
+    disputeOutcome: {
+      type: String,
+      enum: ["", "complainant_upheld", "subject_upheld", "partial"],
+      default: "",
+    },
+    /** Optional screenshots / Drive links / chat logs (https URLs only), max 5 */
+    evidenceLinks: {
+      type: [String],
+      default: [],
+      validate: {
+        validator(arr) {
+          return !arr || arr.length <= 5;
+        },
+        message: "At most 5 evidence links are allowed",
+      },
+    },
+    /** One appeal after status resolved or dismissed; reopens ticket for admins */
+    appealMessage: {
+      type: String,
+      trim: true,
+      maxlength: 2000,
+      default: "",
+    },
+    appealedAt: {
+      type: Date,
+      default: null,
+    },
+    /** True after the complainant uses their single allowed appeal */
+    appealExhausted: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

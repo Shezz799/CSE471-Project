@@ -16,6 +16,25 @@ const CATEGORY_OPTIONS = [
 const formatStatus = (s) =>
   s ? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "";
 
+const OUTCOME_SHORT = {
+  complainant_upheld: "Ruling in your favor",
+  subject_upheld: "Ruling for reported user",
+  partial: "Mixed outcome",
+};
+
+const PIPELINE_SHORT = {
+  received: "Received",
+  under_review: "Under review",
+  result: "Decision stage",
+};
+
+const parseEvidenceLines = (text) =>
+  String(text || "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+
 const Complaints = () => {
   const { user } = useAuth();
   const isDashboardAdmin = user?.isDashboardAdmin;
@@ -25,6 +44,7 @@ const Complaints = () => {
   const [description, setDescription] = useState("");
   const [subjectEmail, setSubjectEmail] = useState("");
   const [relatedPostId, setRelatedPostId] = useState("");
+  const [evidenceLines, setEvidenceLines] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formMsg, setFormMsg] = useState({ type: "", text: "" });
 
@@ -81,16 +101,19 @@ const Complaints = () => {
     }
     setSubmitting(true);
     try {
+      const links = parseEvidenceLines(evidenceLines);
       await createComplaint({
         category,
         description: description.trim(),
         subjectUserEmail: subjectEmail.trim() || undefined,
         relatedPostId: relatedPostId || undefined,
+        evidenceLinks: links.length ? links : undefined,
       });
       setFormMsg({ type: "ok", text: "Complaint submitted. An admin will review it." });
       setDescription("");
       setSubjectEmail("");
       setRelatedPostId("");
+      setEvidenceLines("");
       await loadMine();
     } catch (err) {
       setFormMsg({
@@ -184,6 +207,22 @@ const Complaints = () => {
                 ))}
               </select>
             </div>
+            <div className="field">
+              <label className="label" htmlFor="cmp-evidence">
+                Evidence links (optional, up to 5)
+              </label>
+              <textarea
+                id="cmp-evidence"
+                className="input"
+                rows={3}
+                value={evidenceLines}
+                onChange={(e) => setEvidenceLines(e.target.value)}
+                placeholder={"One https:// link per line — e.g. screenshot in Drive, chat export, etc."}
+              />
+              <p className="module2-muted" style={{ marginTop: "0.35rem", fontSize: "0.82rem" }}>
+                Only http(s) URLs are kept. Internal admin notes are never visible to you on this page.
+              </p>
+            </div>
             {formMsg.text && (
               <p className={formMsg.type === "ok" ? "module2-success" : "error"}>{formMsg.text}</p>
             )}
@@ -206,11 +245,14 @@ const Complaints = () => {
                     <span className={`module2-badge module2-badge--${c.status}`}>
                       {formatStatus(c.status)}
                     </span>
+                    {c.pipelineStage ? (
+                      <span className="module2-muted"> · {PIPELINE_SHORT[c.pipelineStage] || formatStatus(c.pipelineStage)}</span>
+                    ) : null}
                   </div>
                   <p className="module2-review-text">{c.description}</p>
-                  {c.adminNotes ? (
-                    <p className="module2-admin-note">
-                      <em>Admin:</em> {c.adminNotes}
+                  {c.disputeOutcome && c.resolutionSummary ? (
+                    <p className="module2-muted" style={{ marginTop: "0.35rem" }}>
+                      <strong>Outcome:</strong> {OUTCOME_SHORT[c.disputeOutcome] || formatStatus(c.disputeOutcome)}
                     </p>
                   ) : null}
                   {c.complainantMessage ? (
@@ -218,6 +260,11 @@ const Complaints = () => {
                       <em>Update for you:</em> {c.complainantMessage}
                     </p>
                   ) : null}
+                  <p style={{ marginTop: "0.5rem" }}>
+                    <Link to={`/complaints/ticket/${c._id}`} className="button button--ghost" style={{ width: "auto" }}>
+                      Open ticket
+                    </Link>
+                  </p>
                 </li>
               ))}
             </ul>

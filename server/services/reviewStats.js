@@ -63,12 +63,19 @@ async function getFullReviewStatsForUser(userId) {
           _id: null,
           count: { $sum: 1 },
           averageRating: { $avg: "$rating" },
+          avgTopicKnowledge: { $avg: "$criteria.topicKnowledge" },
+          avgTeachingClarity: { $avg: "$criteria.teachingClarity" },
+          avgCommunication: { $avg: "$criteria.communication" },
+          avgPatience: { $avg: "$criteria.patience" },
+          avgProfessionalism: { $avg: "$criteria.professionalism" },
+          avgHelpfulness: { $avg: "$criteria.helpfulness" },
         },
       },
     ]),
     Review.aggregate([
       { $match: { reviewee: oid } },
-      { $group: { _id: "$rating", n: { $sum: 1 } } },
+      { $project: { starBucket: { $round: ["$rating", 0] } } },
+      { $group: { _id: "$starBucket", n: { $sum: 1 } } },
     ]),
     Post.countDocuments({ offers: userId }),
   ]);
@@ -83,9 +90,21 @@ async function getFullReviewStatsForUser(userId) {
       distribution[key] = d.n;
     }
   }
+  const topicAverages = row
+    ? {
+        topicKnowledge: Math.round((row.avgTopicKnowledge || 0) * 100) / 100,
+        teachingClarity: Math.round((row.avgTeachingClarity || 0) * 100) / 100,
+        communication: Math.round((row.avgCommunication || 0) * 100) / 100,
+        patience: Math.round((row.avgPatience || 0) * 100) / 100,
+        professionalism: Math.round((row.avgProfessionalism || 0) * 100) / 100,
+        helpfulness: Math.round((row.avgHelpfulness || 0) * 100) / 100,
+      }
+    : null;
+
   return {
     reviewCount,
     averageRating,
+    topicAverages,
     distribution,
     helpsOfferedCount,
   };

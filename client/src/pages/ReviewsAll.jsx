@@ -58,7 +58,7 @@ const ReviewsAll = ({ mode }) => {
             <li key={r._id} className="module2-list-item">
               {isGiven ? (
                 <>
-                  <strong>{r.rating}★</strong> to {r.reviewee?.name || "Mentor"}
+                  <strong>{Number(r.rating).toFixed(2)}★</strong> to {r.reviewee?.name || "Mentor"}
                   {r.post && (
                     <span className="module2-muted">
                       {" "}
@@ -68,7 +68,7 @@ const ReviewsAll = ({ mode }) => {
                 </>
               ) : (
                 <>
-                  <strong>{r.rating}★</strong> from {r.reviewer?.name || "Student"}
+                  <strong>{Number(r.rating).toFixed(2)}★</strong> from {r.reviewer?.name || "Student"}
                   {r.post && (
                     <span className="module2-muted">
                       {" "}
@@ -78,6 +78,13 @@ const ReviewsAll = ({ mode }) => {
                 </>
               )}
               {r.comment ? <p className="module2-review-text">{r.comment}</p> : null}
+              {r.criteria ? (
+                <p className="module2-muted">
+                  Topic {r.criteria.topicKnowledge}/5 · Clarity {r.criteria.teachingClarity}/5 · Communication{" "}
+                  {r.criteria.communication}/5 · Patience {r.criteria.patience}/5 · Professionalism{" "}
+                  {r.criteria.professionalism}/5 · Helpfulness {r.criteria.helpfulness}/5
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>

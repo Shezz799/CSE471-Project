@@ -239,7 +239,7 @@ const Dashboard = () => {
               onClick={() => navigate("/notifications")}
             >
               <span className="skill-dashboard__sidebar-icon" aria-hidden>🔔</span>
-              <span className="skill-dashboard__sidebar-label">Notification</span>
+              <span className="skill-dashboard__sidebar-label">Notifications</span>
               {unreadCount > 0 ? (
                 <span className="skill-dashboard__sidebar-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
               ) : null}
@@ -261,6 +261,24 @@ const Dashboard = () => {
             >
               <span className="skill-dashboard__sidebar-icon" aria-hidden>★</span>
               <span className="skill-dashboard__sidebar-label">Reviews and rating</span>
+            </button>
+
+            <button
+              type="button"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/credits") ? "is-active" : ""}`}
+              onClick={() => navigate("/credits")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>৳</span>
+              <span className="skill-dashboard__sidebar-label">Credits & gifts</span>
+            </button>
+
+            <button
+              type="button"
+              className={`skill-dashboard__sidebar-link ${isRouteActive("/courses") ? "is-active" : ""}`}
+              onClick={() => navigate("/courses")}
+            >
+              <span className="skill-dashboard__sidebar-icon" aria-hidden>▣</span>
+              <span className="skill-dashboard__sidebar-label">Promoted courses</span>
             </button>
 
             <button

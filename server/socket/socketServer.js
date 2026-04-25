@@ -69,16 +69,21 @@ const removeUserSocket = (userId, socketId) => {
 };
 
 const emitToUser = (userId, eventName, payload) => {
-  if (!io) return;
-  const socketIds = onlineUsers.get(String(userId));
+  if (!io) {
+    console.warn("[socket] emitToUser skipped (io not ready):", eventName, String(userId));
+    return;
+  }
+  const uid = String(userId);
+  const socketIds = onlineUsers.get(uid);
+  // Prefer emitting to known socket ids (set on connection). Room-only delivery was missing
+  // some clients in practice; direct sid emit matches how call/chat events are routed.
   if (socketIds && socketIds.size > 0) {
-    socketIds.forEach((socketId) => {
-      io.to(socketId).emit(eventName, payload);
+    socketIds.forEach((sid) => {
+      io.to(sid).emit(eventName, payload);
     });
     return;
   }
-
-  io.to(`user:${String(userId)}`).emit(eventName, payload);
+  io.to(`user:${uid}`).emit(eventName, payload);
 };
 
 const joinUserSocketsToChatRoom = (userId, chatId) => {
@@ -95,10 +100,14 @@ const joinUserSocketsToChatRoom = (userId, chatId) => {
 };
 
 const joinUserRooms = async (socket, userId) => {
-  socket.join(`user:${String(userId)}`);
-
-  const chats = await Chat.find({ participants: userId }).select("_id");
-  chats.forEach((chat) => socket.join(String(chat._id)));
+  const uid = String(userId);
+  socket.join(`user:${uid}`);
+  try {
+    const chats = await Chat.find({ participants: userId }).select("_id").lean();
+    chats.forEach((chat) => socket.join(String(chat._id)));
+  } catch (e) {
+    console.error("[socket] joinUserRooms chat lookup failed for", uid, e?.message || e);
+  }
 };
 
 const isParticipantInChat = async (chatId, userId) => {
@@ -391,9 +400,20 @@ const setupSocketHandlers = (socket) => {
 };
 
 const initSocketServer = (httpServer) => {
+  const defaultClient = (process.env.CLIENT_URL || "http://localhost:5173").replace(/\/$/, "");
+  const socketCorsOrigins = new Set(
+    [defaultClient, "http://localhost:5173", "http://127.0.0.1:5173"].filter(Boolean)
+  );
+
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || "http://localhost:5173",
+      origin(origin, callback) {
+        if (!origin) return callback(null, true);
+        if (socketCorsOrigins.has(String(origin).replace(/\/$/, ""))) {
+          return callback(null, true);
+        }
+        return callback(null, false);
+      },
       credentials: true,
     },
   });
@@ -421,7 +441,11 @@ const initSocketServer = (httpServer) => {
   io.on("connection", async (socket) => {
     const userId = socket.user.id;
     addUserSocket(userId, socket.id);
-    await joinUserRooms(socket, userId);
+    try {
+      await joinUserRooms(socket, userId);
+    } catch (e) {
+      console.error("[socket] joinUserRooms failed for", userId, e?.message || e);
+    }
 
     io.emit("presence:update", { userId, online: true });
 
@@ -455,4 +479,12 @@ const getIO = () => {
   return io;
 };
 
-module.exports = { initSocketServer, getIO, emitToUser, joinUserSocketsToChatRoom };
+const getOnlineSocketCountForUser = (userId) => onlineUsers.get(String(userId))?.size ?? 0;
+
+module.exports = {
+  initSocketServer,
+  getIO,
+  emitToUser,
+  joinUserSocketsToChatRoom,
+  getOnlineSocketCountForUser,
+};
