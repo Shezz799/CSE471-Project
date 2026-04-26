@@ -38,6 +38,7 @@ const PostCard = ({ post, currentUser, onDelete, onOfferHelp }) => {
   const canOfferHelp = currentUser && !isAuthor && post.status === "open" && !alreadyOffered;
 
   const description = post.description || "";
+  const demo = post.demo || "";
   const showExpand = hasMoreSentences(description);
   const displayDescription = showExpand && !expanded
     ? getFirstSentences(description)
@@ -99,6 +100,7 @@ const PostCard = ({ post, currentUser, onDelete, onOfferHelp }) => {
 
           <h3 className="post-card__subject">{post.subject}</h3>
           <p className="post-card__description">{displayDescription}</p>
+          {demo ? <p className="post-card__description"><strong>Demo:</strong> {demo}</p> : null}
 
           {showExpand && (
             <button

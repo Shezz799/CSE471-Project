@@ -21,7 +21,7 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedSubtag, setSelectedSubtag] = useState("All");
-  const [form, setForm] = useState({ subject: "", topic: "", description: "", creditsOffered: "" });
+  const [form, setForm] = useState({ subject: "", topic: "", description: "", demo: "", creditsOffered: "" });
   const [submitting, setSubmitting] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(FEED_BATCH_SIZE);
@@ -72,8 +72,8 @@ const Dashboard = () => {
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (!form.subject.trim() || !form.topic.trim() || !form.description.trim()) {
-      alert("Subject, topic and description are required.");
+    if (!form.subject.trim() || !form.topic.trim() || !form.description.trim() || !form.demo.trim()) {
+      alert("Subject, topic, description and demo are required.");
       return;
     }
     setSubmitting(true);
@@ -82,9 +82,10 @@ const Dashboard = () => {
         subject: form.subject.trim(),
         topic: form.topic.trim(),
         description: form.description.trim(),
+        demo: form.demo.trim(),
         creditsOffered: form.creditsOffered ? Number(form.creditsOffered) : 0,
       });
-      setForm({ subject: "", topic: "", description: "", creditsOffered: "" });
+      setForm({ subject: "", topic: "", description: "", demo: "", creditsOffered: "" });
       setCreateModalOpen(false);
       await loadPosts();
     } catch (err) {
@@ -97,7 +98,7 @@ const Dashboard = () => {
   const closeCreateModal = () => {
     if (!submitting) {
       setCreateModalOpen(false);
-      setForm({ subject: "", topic: "", description: "", creditsOffered: "" });
+      setForm({ subject: "", topic: "", description: "", demo: "", creditsOffered: "" });
     }
   };
 
@@ -144,7 +145,8 @@ const Dashboard = () => {
       const matchSubject = p.subject?.toLowerCase().includes(q);
       const matchTopic = p.topic?.toLowerCase().includes(q);
       const matchDesc = p.description?.toLowerCase().includes(q);
-      if (!matchSubject && !matchTopic && !matchDesc) return false;
+      const matchDemo = p.demo?.toLowerCase().includes(q);
+      if (!matchSubject && !matchTopic && !matchDesc && !matchDemo) return false;
     }
 
     return true;
@@ -489,6 +491,22 @@ const Dashboard = () => {
                 required
               />
             </div>
+                        <div className="field">
+                          <label className="label" htmlFor="modal-demo">Demo</label>
+                          <textarea
+                            id="modal-demo"
+                            className="input"
+                            rows={4}
+                            value={form.demo}
+                            onChange={(e) => setForm((f) => ({ ...f, demo: e.target.value }))}
+                            placeholder="CSE471 live modification test..."
+                            required
+                          />
+                        </div>
+
+
+
+
             <div className="field">
               <label className="label" htmlFor="modal-credits">Credits offered (optional)</label>
               <input

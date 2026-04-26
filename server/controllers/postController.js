@@ -24,11 +24,11 @@ const getPosts = async (req, res) => {
 // POST /api/posts - create a post (auth required; Prithila's form will use this)
 const createPost = async (req, res) => {
   try {
-    const { subject, topic, description, creditsOffered } = req.body;
-    if (!subject || !topic || !description) {
+    const { subject, topic, description, demo, creditsOffered } = req.body;
+    if (!subject || !topic || !description || !demo) {
       return res.status(400).json({
         success: false,
-        message: "Subject, topic and description are required",
+        message: "Subject, topic, description and demo are required",
       });
     }
     const post = await Post.create({
@@ -36,6 +36,7 @@ const createPost = async (req, res) => {
       subject,
       topic,
       description,
+      demo,
       creditsOffered: creditsOffered ? Number(creditsOffered) : 0,
     });
     const populated = await Post.findById(post._id)

@@ -21,6 +21,12 @@ const postSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    demo: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     creditsOffered: {
       type: Number,
       default: 0,
