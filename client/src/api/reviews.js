@@ -10,3 +10,5 @@ export const getReviewsForUser = (userId, params) =>
 export const getMyReviewsGiven = () => api.get("/api/reviews/me/given");
 
 export const getMyReviewsReceived = () => api.get("/api/reviews/me/received");
+
+export const deleteMyReview = (reviewId) => api.delete(`/api/reviews/${reviewId}`);

@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { getPosts } from "../api/posts";
 import {
   createReview,
+  deleteMyReview,
   getMyReviewsGiven,
   getMyReviewsReceived,
   getReviewStats,
@@ -46,6 +47,7 @@ const RateMentor = () => {
   const [given, setGiven] = useState([]);
   const [received, setReceived] = useState([]);
   const [statsPreview, setStatsPreview] = useState(null);
+  const [deletingGivenId, setDeletingGivenId] = useState(null);
 
   const rating = Math.round(
     ((criteria.topicKnowledge +
@@ -226,6 +228,18 @@ const RateMentor = () => {
     }
   };
 
+  const handleDeleteGiven = async (reviewId) => {
+    if (!reviewId || deletingGivenId) return;
+    setDeletingGivenId(reviewId);
+    try {
+      await deleteMyReview(reviewId);
+      setGiven((prev) => prev.filter((r) => String(r._id) !== String(reviewId)));
+    } catch {
+    } finally {
+      setDeletingGivenId(null);
+    }
+  };
+
   return (
     <div className="module2-page">
       <header className="module2-page__header">
@@ -383,15 +397,25 @@ const RateMentor = () => {
             <>
               <ul className="module2-list">
                 {given.slice(0, 1).map((r) => (
-                  <li key={r._id} className="module2-list-item">
-                    <strong>{Number(r.rating).toFixed(2)}★</strong> to {r.reviewee?.name || "Mentor"}
-                    {r.post && (
-                      <span className="module2-muted">
-                        {" "}
-                        · {r.post.subject} / {r.post.topic}
-                      </span>
-                    )}
-                    {r.comment ? <p className="module2-review-text">{r.comment}</p> : null}
+                  <li key={r._id} className="module2-list-item module2-review-given-row">
+                    <div className="module2-review-given-row__body">
+                      <strong>{Number(r.rating).toFixed(2)}★</strong> to {r.reviewee?.name || "Mentor"}
+                      {r.post && (
+                        <span className="module2-muted">
+                          {" "}
+                          · {r.post.subject} / {r.post.topic}
+                        </span>
+                      )}
+                      {r.comment ? <p className="module2-review-text">{r.comment}</p> : null}
+                    </div>
+                    <button
+                      type="button"
+                      className="module2-btn-delete-review"
+                      disabled={deletingGivenId === r._id}
+                      onClick={() => handleDeleteGiven(r._id)}
+                    >
+                      {deletingGivenId === r._id ? "…" : "Delete"}
+                    </button>
                   </li>
                 ))}
               </ul>

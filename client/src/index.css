@@ -3427,6 +3427,41 @@ a {
   background: #dbeafe;
 }
 
+.module2-review-given-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.module2-review-given-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.module2-btn-delete-review {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.module2-btn-delete-review:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.module2-btn-delete-review:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .module2-reviews-received-anchor {
   scroll-margin-top: 1.25rem;
 }

@@ -206,3 +206,25 @@ exports.listForUser = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+exports.deleteMyReview = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    if (!mongoose.isValidObjectId(reviewId)) {
+      return res.status(400).json({ success: false, message: "Invalid review id" });
+    }
+    const removed = await Review.findOneAndDelete({
+      _id: reviewId,
+      reviewer: req.user._id,
+    });
+    if (!removed) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found or you cannot delete it",
+      });
+    }
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

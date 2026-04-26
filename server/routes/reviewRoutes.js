@@ -6,6 +6,7 @@ const {
   listMyReceived,
   getStatsForUser,
   listForUser,
+  deleteMyReview,
 } = require("../controllers/reviewController");
 
 const router = express.Router();
@@ -15,5 +16,6 @@ router.get("/me/given", auth, listMyGiven);
 router.get("/me/received", auth, listMyReceived);
 router.get("/stats/:userId", auth, getStatsForUser);
 router.get("/user/:userId", auth, listForUser);
+router.delete("/:reviewId", auth, deleteMyReview);
 
 module.exports = router;
