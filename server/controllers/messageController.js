@@ -1,5 +1,6 @@
 const Chat = require("../models/Chat");
 const Message = require("../models/Message");
+const SavedMessage = require("../models/SavedMessage");
 const { uploadToCloudinary } = require("../utils/cloudinary");
 const { getIO } = require("../socket/socketServer");
 
@@ -76,4 +77,48 @@ const createMessage = async (req, res) => {
   }
 };
 
-module.exports = { getMessagesByChat, createMessage, ensureParticipant };
+const saveMessage = async (req, res) => {
+  try {
+    const { chatId, messageId } = req.params;
+
+    const { error, status } = await ensureParticipant(chatId, req.user._id);
+    if (error) {
+      return res.status(status).json({ success: false, message: error });
+    }
+
+    const sourceMessage = await Message.findOne({ _id: messageId, chatId });
+    if (!sourceMessage) {
+      return res.status(404).json({ success: false, message: "Message not found" });
+    }
+
+    const existingSavedMessage = await SavedMessage.findOne({
+      savedBy: req.user._id,
+      messageId: sourceMessage._id,
+    });
+
+    if (existingSavedMessage) {
+      return res.status(200).json({
+        success: true,
+        alreadySaved: true,
+        data: existingSavedMessage,
+      });
+    }
+
+    const savedMessage = await SavedMessage.create({
+      messageId: sourceMessage._id,
+      chatId: sourceMessage.chatId,
+      savedBy: req.user._id,
+      senderId: sourceMessage.senderId,
+      text: sourceMessage.text,
+      fileUrl: sourceMessage.fileUrl,
+      fileType: sourceMessage.fileType,
+      messageCreatedAt: sourceMessage.createdAt,
+    });
+
+    return res.status(201).json({ success: true, data: savedMessage });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { getMessagesByChat, createMessage, saveMessage, ensureParticipant };

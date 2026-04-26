@@ -12,6 +12,9 @@ export const respondInvite = (inviteId, action) =>
 
 export const fetchMessages = (chatId) => api.get(`/api/messages/${chatId}`);
 
+export const saveMessageForLater = (chatId, messageId) =>
+  api.post(`/api/messages/${chatId}/${messageId}/save`);
+
 export const uploadMessageWithFile = (chatId, formData) =>
   api.post(`/api/messages/${chatId}`, formData, {
     headers: { "Content-Type": "multipart/form-data" },

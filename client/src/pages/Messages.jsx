@@ -7,6 +7,7 @@ import {
   fetchMessages,
   fetchUsers,
   respondInvite,
+  saveMessageForLater,
   sendInvite,
   uploadMessageWithFile,
 } from "../api/chat";
@@ -50,6 +51,8 @@ const Messages = () => {
   const [activeSession, setActiveSession] = useState(null);
   const [pendingEndSessionRequest, setPendingEndSessionRequest] = useState(null);
   const [sessionActionLoading, setSessionActionLoading] = useState("");
+  const [savedMessageIds, setSavedMessageIds] = useState(new Set());
+  const [savingMessageIds, setSavingMessageIds] = useState(new Set());
 
   const {
     callState,
@@ -595,6 +598,8 @@ const Messages = () => {
   useEffect(() => {
     if (!activeChatId) return;
     loadMessages(activeChatId);
+    setSavedMessageIds(new Set());
+    setSavingMessageIds(new Set());
     const socket = getChatSocket();
     socket?.emit("chat:join", activeChatId);
 
@@ -704,6 +709,34 @@ const Messages = () => {
     const socket = getChatSocket();
     if (!socket || !activeChatId) return;
     socket.emit("chat:typing", { chatId: activeChatId, isTyping });
+  };
+
+  const handleSaveMessage = async (messageId) => {
+    if (!activeChatId || !messageId) return;
+    if (savingMessageIds.has(messageId) || savedMessageIds.has(messageId)) return;
+
+    setSavingMessageIds((prev) => {
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
+
+    try {
+      await saveMessageForLater(activeChatId, messageId);
+      setSavedMessageIds((prev) => {
+        const next = new Set(prev);
+        next.add(messageId);
+        return next;
+      });
+    } catch (error) {
+      alert(error?.response?.data?.message || "Failed to save message");
+    } finally {
+      setSavingMessageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(messageId);
+        return next;
+      });
+    }
   };
 
   const canStartVoiceCall =
@@ -1050,12 +1083,15 @@ const Messages = () => {
           activeChat={activeChat}
           currentUser={user}
           messages={messages}
+          savedMessageIds={savedMessageIds}
+          savingMessageIds={savingMessageIds}
           onlineMap={onlineMap}
           messageText={messageText}
           setMessageText={setMessageText}
           selectedFile={selectedFile}
           setSelectedFile={setSelectedFile}
           onSendMessage={handleSendMessage}
+          onSaveMessage={handleSaveMessage}
           onTyping={handleTyping}
           typingUser={typingUser}
           onToggleProfile={() => setIsProfileDrawerOpen((prev) => !prev)}

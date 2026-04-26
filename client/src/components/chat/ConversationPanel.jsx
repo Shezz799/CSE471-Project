@@ -11,12 +11,15 @@ const ConversationPanel = ({
   activeChat,
   currentUser,
   messages,
+  savedMessageIds,
+  savingMessageIds,
   onlineMap,
   messageText,
   setMessageText,
   selectedFile,
   setSelectedFile,
   onSendMessage,
+  onSaveMessage,
   onTyping,
   typingUser,
   onToggleProfile,
@@ -111,6 +114,8 @@ const ConversationPanel = ({
             ? message.senderId?.name
             : otherParticipant?.name;
           const senderInitial = senderName?.charAt(0)?.toUpperCase() || "?";
+          const isSaved = savedMessageIds?.has(message._id);
+          const isSaving = savingMessageIds?.has(message._id);
 
           return (
             <div
@@ -131,6 +136,14 @@ const ConversationPanel = ({
                     {message.fileType || "Attachment"}
                   </a>
                 )}
+                <button
+                  type="button"
+                  className="chat-message-save-btn"
+                  onClick={() => onSaveMessage?.(message._id)}
+                  disabled={isSaved || isSaving}
+                >
+                  {isSaved ? "Saved" : isSaving ? "Saving..." : "Save"}
+                </button>
                 <span className="chat-message-time">{formatTime(message.createdAt)}</span>
               </div>
             </div>
